@@ -169,7 +169,7 @@ tbody tr:focus-visible{outline-offset:-2px}
 .demo{width:min(760px,94vw);background:var(--ks-bg-canvas);border-radius:var(--r-xl);box-shadow:var(--ks-shadow-3);overflow:hidden}
 .demo .bar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--ks-bg-surface);border-bottom:1px solid var(--ks-border-default);flex-wrap:wrap}
 .fake{position:relative;height:300px;margin:16px;border:1px dashed var(--ks-border-strong);border-radius:var(--r-lg);padding:16px;background:var(--ks-bg-surface)}
-.fake .fld{margin-top:150px;padding:8px 12px;border:1px solid var(--ks-border-strong);border-radius:var(--r-md);background:var(--ks-bg-raised);font-size:14px}
+.fake .fld{margin-top:56px;padding:8px 12px;border:1px solid var(--ks-border-strong);border-radius:var(--r-md);background:var(--ks-bg-raised);font-size:14px}
 .caret{display:inline-block;width:1px;height:16px;background:var(--ks-fg-primary);vertical-align:-3px;animation:pulse 1s steps(1) infinite}
 .picker{position:absolute;width:320px;background:var(--ks-bg-overlay);border-radius:var(--r-xl);box-shadow:var(--ks-shadow-3);padding:16px;overflow:hidden;animation:pin var(--dur-fast) var(--ease)}
 @keyframes pin{from{opacity:0;transform:scale(.98)}}
@@ -189,7 +189,7 @@ tbody tr:focus-visible{outline-offset:-2px}
 [hidden]{display:none!important}
 @media (max-width:1100px){.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.mgrid{grid-template-columns:1fr}.mside{border-left:0;border-top:1px solid var(--ks-border-default)}}
 @media (max-width:960px){.hide-md{display:none}}
-@media (max-width:900px){.app{grid-template-columns:56px 1fr}.nav .lbl,.nav .kb,.brand span,.side-foot .t{display:none}.nav button{justify-content:center;padding:6px 0}.brand{justify-content:center;padding:4px 0 14px}.content{padding:16px}.topbar{padding:8px 16px}.g2{grid-template-columns:1fr}}
+@media (max-width:900px){.app{grid-template-columns:56px 1fr}.nav .kb,.brand span,.side-foot .t,.sb-hk{display:none}.nav .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.nav button{justify-content:center;padding:6px 0}.brand{justify-content:center;padding:4px 0 14px}.content{padding:16px}.topbar{padding:8px 16px}.g2{grid-template-columns:1fr}}
 @media (forced-colors:active){.pill::before,.nav button[aria-current="page"]::before{forced-color-adjust:auto}.btn,.seg button,.hk,.sw button{border:1px solid ButtonText}}
 </style>
 </head>
@@ -215,12 +215,12 @@ tbody tr:focus-visible{outline-offset:-2px}
 <div class="brand"><svg class="i" style="width:20px;height:20px"><use href="#i-logo"/></svg><span>KeySwitch</span></div>
 <nav aria-label="Разделы" data-i18n-aria="nav.aria">
 <ul class="nav" id="nav">
-<li><button data-sec="overview" aria-current="page"><svg class="i"><use href="#i-ov"/></svg><span class="lbl" data-i18n="nav.overview">Обзор</span><span class="kb">^1</span></button></li>
-<li><button data-sec="languages" tabindex="-1"><svg class="i"><use href="#i-lang"/></svg><span class="lbl" data-i18n="nav.languages">Языки и раскладки</span><span class="kb">^2</span></button></li>
-<li><button data-sec="hotkeys" tabindex="-1"><svg class="i"><use href="#i-kb"/></svg><span class="lbl" data-i18n="nav.hotkeys">Горячие клавиши</span><span class="kb">^3</span></button></li>
-<li><button data-sec="macro" tabindex="-1"><svg class="i"><use href="#i-code"/></svg><span class="lbl">Macro Studio</span><span class="kb">^4</span></button></li>
-<li><button data-sec="settings" tabindex="-1"><svg class="i"><use href="#i-set"/></svg><span class="lbl" data-i18n="nav.settings">Настройки</span><span class="kb">^5</span></button></li>
-<li><button data-sec="diagnostics" tabindex="-1"><svg class="i"><use href="#i-act"/></svg><span class="lbl" data-i18n="nav.diagnostics">Диагностика</span><span class="kb">^6</span></button></li>
+<li><button data-sec="overview" title="Обзор" aria-current="page"><svg class="i"><use href="#i-ov"/></svg><span class="lbl" data-i18n="nav.overview">Обзор</span><span class="kb">^1</span></button></li>
+<li><button data-sec="languages" title="Языки и раскладки" tabindex="-1"><svg class="i"><use href="#i-lang"/></svg><span class="lbl" data-i18n="nav.languages">Языки и раскладки</span><span class="kb">^2</span></button></li>
+<li><button data-sec="hotkeys" title="Горячие клавиши" tabindex="-1"><svg class="i"><use href="#i-kb"/></svg><span class="lbl" data-i18n="nav.hotkeys">Горячие клавиши</span><span class="kb">^3</span></button></li>
+<li><button data-sec="macro" title="Macro Studio" tabindex="-1"><svg class="i"><use href="#i-code"/></svg><span class="lbl">Macro Studio</span><span class="kb">^4</span></button></li>
+<li><button data-sec="settings" title="Настройки" tabindex="-1"><svg class="i"><use href="#i-set"/></svg><span class="lbl" data-i18n="nav.settings">Настройки</span><span class="kb">^5</span></button></li>
+<li><button data-sec="diagnostics" title="Диагностика" tabindex="-1"><svg class="i"><use href="#i-act"/></svg><span class="lbl" data-i18n="nav.diagnostics">Диагностика</span><span class="kb">^6</span></button></li>
 </ul>
 </nav>
 <div class="side-foot">
@@ -261,9 +261,6 @@ tbody tr:focus-visible{outline-offset:-2px}
 <div class="card stack"><h2 data-i18n="ov.macro">Макрос</h2><div class="keys" data-show="macro"></div><div class="row"><span class="pill ok">Включён</span><span class="sec">JavaScript · слот 1</span></div><div><button class="link" data-go="macro" data-i18n="ov.openMs">Открыть Macro Studio</button></div></div>
 <div class="card stack"><h2 data-i18n="ov.last">Последняя операция</h2><div><span class="num">14:02:31</span> · <span class="mono">telegram.exe</span></div><div class="row"><span class="pill ok">Выполнено</span><span class="sec">Конвертация · Поле</span></div><div><button class="link" data-go="diagnostics" data-i18n="ov.log">Открыть журнал</button></div></div>
 </div>
-<div class="card" style="margin-top:16px"><h2 data-i18n="ov.how">Как это работает</h2>
-<div class="row" style="gap:16px"><span class="mono">Ghbdtn, rfr ltkf?</span><span class="muted">→</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Space</kbd></span><span class="muted">→</span><span class="mono">Привет, как дела?</span></div>
-<p class="sec" style="margin:8px 0 0">Если замену нельзя выполнить безопасно, KeySwitch ничего не меняет.</p></div>
 </section>
 <!-- LANGUAGES -->
 <section class="page" id="languages" aria-labelledby="h-la" hidden>
@@ -341,9 +338,6 @@ tbody tr:focus-visible{outline-offset:-2px}
 <div id="auto-err" hidden class="alert err"><svg class="i"><use href="#i-warn"/></svg><div><b>Не удалось включить автозапуск</b>Запись в параметры запуска запрещена политикой. Подробности — в Диагностике.</div></div>
 <div class="sw"><button role="switch" aria-checked="false" aria-labelledby="sw-autofail" id="autofail"></button><span class="t" id="sw-autofail"><b class="muted" style="font-weight:400">Демо: имитировать ошибку автозапуска</b></span></div>
 </div>
-<div class="card stack"><h2 data-i18n="se.behavior">Поведение</h2>
-<div class="sw"><button role="switch" aria-checked="true" aria-labelledby="sw-snd"></button><span class="t" id="sw-snd"><b>Звук при отмене операции</b><span>Короткий системный звук, когда KeySwitch не выполнил замену</span></span></div>
-</div>
 <div class="card stack"><h2 data-i18n="se.excl">Исключения</h2>
 <p class="sec" style="margin:0">В этих приложениях KeySwitch ничего не делает.</p>
 <ul class="excl" id="excl"></ul>
@@ -374,7 +368,7 @@ tbody tr:focus-visible{outline-offset:-2px}
 </section>
 </div>
 </div>
-<footer class="statusbar" aria-label="Строка состояния"><span id="sb-st">● Активно</span><span><span data-i18n="sb.conv">Конвертация</span> <span class="mono" id="sb-conv"></span></span><span><span data-i18n="sb.macro">Макрос</span> <span class="mono" id="sb-macro"></span></span><span class="r" id="sb-pos"></span><span data-i18n="sb.local">Локально · без сети</span></footer>
+<footer class="statusbar" aria-label="Строка состояния"><span id="sb-st">● Активно</span><span class="sb-hk"><span data-i18n="sb.conv">Конвертация</span> <span class="mono" id="sb-conv"></span></span><span class="sb-hk"><span data-i18n="sb.macro">Макрос</span> <span class="mono" id="sb-macro"></span></span><span class="r" id="sb-pos"></span><span data-i18n="sb.local">Локально · без сети</span></footer>
 </div>
 <div class="scrim" id="modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mh"><h2 id="mh">Очистить журнал?</h2><p class="sec" style="margin:0">Все записи журнала будут удалены с этого компьютера. Это действие нельзя отменить.</p><div class="f"><button class="btn btn-s" id="m-cancel">Отмена</button><button class="btn btn-d" id="m-ok">Очистить журнал</button></div></div></div>
 <div class="scrim" id="pdemo" hidden><div class="demo" role="region" aria-label="Демонстрация окна выбора языка">
@@ -440,7 +434,7 @@ const MODS=['Ctrl','Alt','Shift'];
 let rec=null,recMods=[];
 function kbd(keys){return keys.map(k=>'<kbd>'+k+'</kbd>').join('')}
 function aria(keys){return keys.map(k=>({Ctrl:'Control',Space:'Пробел'}[k]||k)).join(' плюс ')}
-function keyName(e){const c=e.code;if(/^Key[A-Z]$/.test(c))return c.slice(3);if(/^Digit\d$/.test(c))return c.slice(5);if(/^F\d{1,2}$/.test(c))return c;const m={Space:'Space',Escape:'Esc',Enter:'Enter',Backspace:'Backspace',Delete:'Delete',Insert:'Insert',Home:'Home',End:'End',PageUp:'PgUp',PageDown:'PgDn',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Backquote:'`',Minus:'-',Equal:'=',BracketLeft:'[',BracketRight:']',Semicolon:';',Quote:"'",Comma:',',Period:'.',Slash:'/',Backslash:'\\'};return m[c]||null}
+function keyName(e){const c=e.code;if(/^Key[A-Z]$/.test(c))return c.slice(3);if(/^Digit\d$/.test(c))return c.slice(5);if(/^F\d{1,2}$/.test(c))return c;const m={Space:'Space',Escape:'Esc',Enter:'Enter',Backspace:'Backspace',Delete:'Delete',Home:'Home',End:'End',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Backquote:'`'};return m[c]||null}
 function renderHK(){
 ['conv','macro'].forEach(id=>{const tr=$('tr[data-hk='+id+']'),w=tr.querySelector('.hk-wrap'),st=tr.querySelector('.hk-st');const r=rec===id,keys=r?recMods:hk[id];
 w.innerHTML='<button class="hk'+(r?' rec':'')+(hkErr[id]?' bad':'')+'" data-cap="'+id+'" aria-label="Сочетание для «'+NAMES[id]+'»: '+(keys.length?aria(keys):'не задано')+'. Нажмите, чтобы изменить" aria-describedby="hk-rules'+(hkErr[id]?' err-'+id:'')+'">'+(r?'<span class="rdot"></span>':'')+'<span class="keys">'+(keys.length?kbd(keys):'')+'</span>'+(r&&!keys.length?'<span class="ph">Нажмите сочетание… Esc — отмена</span>':'')+(!r&&!keys.length?'<span class="ph">Не задано</span>':'')+'</button>'+(hkErr[id]?'<div class="err-t" id="err-'+id+'">'+hkErr[id]+'</div>':'');
@@ -513,13 +507,11 @@ src.addEventListener('keyup',caretPos);src.addEventListener('click',caretPos);
 src.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey&&!src.dataset.esc&&mtype!=='text'){e.preventDefault();const s=src.selectionStart;src.setRangeText('  ',s,src.selectionEnd,'end');src.dispatchEvent(new Event('input'))}src.dataset.esc=e.key==='Escape'?'1':''});
 function check(){const t=src.value,P=[],lines=t.split('\n');
 const FORB=mtype==='js'?['fetch','XMLHttpRequest','require','WebSocket','eval']:['open','__import__','socket','subprocess','os.system'];
-lines.forEach((l,i)=>{const code=l.replace(mtype==='js'?/\/\/.*$/:/#.*$/,'');FORB.forEach(f=>{const j=code.indexOf(f+(f.includes('.')?'':'('));if(j>=0&&(f!=='open'||!/\w/.test(code[j-1]||'')))P.push({line:i+1,col:j+1,code:'E_FORBIDDEN_API',msg:f+' недоступен в песочнице KeySwitch'})});
-if(mtype==='py'&&/^\s*import\s+(os|socket|subprocess|urllib)/.test(code))P.push({line:i+1,col:1,code:'E_FORBIDDEN_API',msg:'модуль недоступен в песочнице KeySwitch'})});
+lines.forEach((l,i)=>{const code=l.replace(mtype==='js'?/\/\/.*$/:/#.*$/,'');FORB.forEach(f=>{const j=code.indexOf(f+(f.includes('.')?'':'('));if(j>=0&&(f!=='open'||!/\w/.test(code[j-1]||'')))P.push({line:i+1,col:j+1,code:'E_FORBIDDEN_API',msg:f+' недоступен в песочнице KeySwitch'})});});
 const st=[],pairs={')':'(',']':'[','}':'{'};let line=1,col=0,inS=null,inC=false;
 for(let i=0;i<t.length;i++){const ch=t[i];col++;if(ch==='\n'){line++;col=0;inC=false;if(inS){inS=null}continue}if(inC)continue;
 if(inS){if(ch==='\\'){i++;col++}else if(ch===inS)inS=null;continue}
 if(ch==='"'||ch==="'"){inS=ch;continue}if((mtype==='js'&&ch==='/'&&t[i+1]==='/')||(mtype==='py'&&ch==='#')){inC=true;continue}
-if(mtype==='js'&&ch==='/'&&/[(,=:\s]/.test(t[i-1]||'')){const m=t.slice(i).match(/^\/(?:[^\/\\\n]|\\.)+\/[gimsuy]*/);if(m){i+=m[0].length-1;col+=m[0].length-1;continue}}
 if('([{'.includes(ch))st.push({ch,line,col});else if(pairs[ch]){const top=st.pop();if(!top||top.ch!==pairs[ch]){P.push({line,col,code:'E_SYNTAX',msg:'SyntaxError: неожиданный символ «'+ch+'»'});break}}}
 if(!P.some(p=>p.code==='E_SYNTAX')&&st.length){const o=st[st.length-1],cl={'(':')','[':']','{':'}'}[o.ch];P.push({line:o.line,col:o.col,code:'E_SYNTAX',msg:'SyntaxError: ожидалась «'+cl+'» для «'+o.ch+'»'})}
 return P.sort((a,b)=>a.line-b.line)}

@@ -59,6 +59,8 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 ```
 
+> Вариант без дублирования значений (так сделано в прототипе): JS выставляет `data-sys="light|dark"` по `matchMedia('(prefers-color-scheme: light)')` с подпиской на `change`, а светлые токены задаются один раз селектором `:root[data-theme="light"], :root[data-theme="system"][data-sys="light"]`. Результат тот же: «Системная» = `prefers-color-scheme`. **[ARCH]**: проверить, что WebView2 отдаёт актуальный `prefers-color-scheme` при смене темы Windows без перезапуска; иначе — событие темы от Tauri.
+
 > Тёмная тема — значение по умолчанию на `:root` (и до загрузки настроек), чтобы не было вспышки белого при запуске (FOUC). Настройку темы фронтенд выставляет атрибутом `data-theme` на `<html>` до первого рендера.
 
 ## 2. Цвет
