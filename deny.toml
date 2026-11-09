@@ -1,0 +1,27 @@
+# cargo-deny: advisories, licenses, banned crates, allowed sources.
+[graph]
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
+
+[advisories]
+version = 2
+yanked = "deny"
+# Unmaintained-crate advisories in transitive Tauri deps are reviewed, not auto-failed.
+unmaintained = "workspace"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+  "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-3-Clause",
+  "Zlib", "Unicode-3.0", "MPL-2.0", "CC0-1.0",
+]
+private = { ignore = true }
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
