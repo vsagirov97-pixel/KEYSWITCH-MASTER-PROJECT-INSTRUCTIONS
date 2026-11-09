@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="ru" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KeySwitch — прототип главного окна</title>
+<!-- Static design prototype. No network resources, no web fonts. Tokens = docs/research/design-system.md -->
+<style>
+:root{color-scheme:dark;
+--ks-bg-canvas:#0E1013;--ks-bg-surface:#15181D;--ks-bg-raised:#1C2027;--ks-bg-overlay:#232831;--ks-bg-hover:#2A303A;--ks-bg-selected:#1E2B44;
+--ks-border-subtle:#262B33;--ks-border-default:#353C47;--ks-border-strong:#6C7686;
+--ks-fg-primary:#E7EAEE;--ks-fg-secondary:#AEB6C2;--ks-fg-muted:#949DAA;--ks-fg-disabled:#5A626E;
+--ks-accent:#2D6AD6;--ks-accent-hover:#3572DD;--ks-accent-pressed:#255DC0;--ks-on-accent:#FFFFFF;--ks-accent-fg:#7FB0FF;--ks-focus-ring:#7FB0FF;
+--ks-success-fg:#4CC38A;--ks-success-bg:#13261C;--ks-warning-fg:#E5A93D;--ks-warning-bg:#2B2213;--ks-danger-fg:#FF7B72;--ks-danger-bg:#2E1716;--ks-info-fg:#6CB6FF;--ks-info-bg:#14233A;
+--ks-danger-solid:#D23F3F;--ks-on-danger:#FFFFFF;
+--ks-bg-editor:#0E1013;--ks-bg-editor-line:#171B21;--ks-syn-keyword:#C59BFF;--ks-syn-string:#8FD18F;--ks-syn-number:#F2B36F;--ks-syn-comment:#8C95A3;--ks-syn-function:#7FB0FF;
+--ks-shadow-1:0 1px 2px rgba(0,0,0,.4);--ks-shadow-2:0 4px 12px rgba(0,0,0,.45),0 0 0 1px #353C47;--ks-shadow-3:0 12px 32px rgba(0,0,0,.55),0 0 0 1px #353C47;--ks-scrim:rgba(0,0,0,.55);
+--font-sans:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+--font-display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+--font-mono:"Cascadia Mono","Cascadia Code",Consolas,"Courier New",monospace;
+--r-sm:4px;--r-md:6px;--r-lg:8px;--r-xl:12px;--dur-fast:100ms;--dur-base:160ms;--dur-slow:240ms;--ease:cubic-bezier(.2,0,0,1)}
+:root[data-theme="light"]{color-scheme:light;
+--ks-bg-canvas:#F4F5F7;--ks-bg-surface:#FFFFFF;--ks-bg-raised:#FFFFFF;--ks-bg-overlay:#FFFFFF;--ks-bg-hover:#EBEDF0;--ks-bg-selected:#E3ECFD;
+--ks-border-subtle:#E4E7EB;--ks-border-default:#CDD2D9;--ks-border-strong:#7D8796;
+--ks-fg-primary:#16191E;--ks-fg-secondary:#454D5A;--ks-fg-muted:#5B6472;--ks-fg-disabled:#A0A7B1;
+--ks-accent:#1F5FCC;--ks-accent-hover:#1A53B5;--ks-accent-pressed:#16479C;--ks-accent-fg:#1A56BD;--ks-focus-ring:#1F5FCC;
+--ks-success-fg:#18794A;--ks-success-bg:#E6F4EC;--ks-warning-fg:#8A5300;--ks-warning-bg:#FBF1DE;--ks-danger-fg:#BF2A2A;--ks-danger-bg:#FCE9E8;--ks-info-fg:#1A64A8;--ks-info-bg:#E5F0FA;
+--ks-danger-solid:#C42B2B;--ks-bg-editor:#FFFFFF;--ks-bg-editor-line:#F2F4F7;--ks-syn-keyword:#7A3DC7;--ks-syn-string:#2D7A2D;--ks-syn-number:#A3520A;--ks-syn-comment:#5F6876;--ks-syn-function:#1A56BD;
+--ks-shadow-1:0 1px 2px rgba(16,24,40,.06);--ks-shadow-2:0 4px 12px rgba(16,24,40,.1),0 0 0 1px #E4E7EB;--ks-shadow-3:0 12px 32px rgba(16,24,40,.16),0 0 0 1px #CDD2D9;--ks-scrim:rgba(16,24,40,.32)}
+@media (prefers-color-scheme:light){:root[data-theme="system"]{color-scheme:light;
+--ks-bg-canvas:#F4F5F7;--ks-bg-surface:#FFFFFF;--ks-bg-raised:#FFFFFF;--ks-bg-overlay:#FFFFFF;--ks-bg-hover:#EBEDF0;--ks-bg-selected:#E3ECFD;
+--ks-border-subtle:#E4E7EB;--ks-border-default:#CDD2D9;--ks-border-strong:#7D8796;
+--ks-fg-primary:#16191E;--ks-fg-secondary:#454D5A;--ks-fg-muted:#5B6472;--ks-fg-disabled:#A0A7B1;
+--ks-accent:#1F5FCC;--ks-accent-hover:#1A53B5;--ks-accent-pressed:#16479C;--ks-accent-fg:#1A56BD;--ks-focus-ring:#1F5FCC;
+--ks-success-fg:#18794A;--ks-success-bg:#E6F4EC;--ks-warning-fg:#8A5300;--ks-warning-bg:#FBF1DE;--ks-danger-fg:#BF2A2A;--ks-danger-bg:#FCE9E8;--ks-info-fg:#1A64A8;--ks-info-bg:#E5F0FA;
+--ks-danger-solid:#C42B2B;--ks-bg-editor:#FFFFFF;--ks-bg-editor-line:#F2F4F7;--ks-syn-keyword:#7A3DC7;--ks-syn-string:#2D7A2D;--ks-syn-number:#A3520A;--ks-syn-comment:#5F6876;--ks-syn-function:#1A56BD;
+--ks-shadow-1:0 1px 2px rgba(16,24,40,.06);--ks-shadow-2:0 4px 12px rgba(16,24,40,.1),0 0 0 1px #E4E7EB;--ks-shadow-3:0 12px 32px rgba(16,24,40,.16),0 0 0 1px #CDD2D9;--ks-scrim:rgba(16,24,40,.32)}}
+@media (prefers-reduced-motion:reduce){:root{--dur-fast:0ms;--dur-base:0ms;--dur-slow:0ms}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--ks-bg-canvas);color:var(--ks-fg-primary);font:400 13px/20px var(--font-sans);min-width:720px}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ks-focus-ring);outline-offset:2px}
+.mono{font-family:var(--font-mono)}
+.muted{color:var(--ks-fg-muted)}.sec{color:var(--ks-fg-secondary)}
+.app{display:grid;grid-template-columns:224px 1fr;grid-template-rows:1fr 24px;height:100vh}
+/* sidebar */
+.sidebar{background:var(--ks-bg-surface);border-right:1px solid var(--ks-border-subtle);display:flex;flex-direction:column;padding:12px 8px;gap:2px;overflow:auto}
+.brand{display:flex;align-items:center;gap:8px;padding:4px 10px 14px;font:600 14px/20px var(--font-display)}
+.brand svg{color:var(--ks-accent-fg)}
+.nav{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.nav button{position:relative;width:100%;min-height:32px;display:flex;align-items:center;gap:10px;padding:6px 10px;border:0;border-radius:var(--r-md);background:none;color:var(--ks-fg-secondary);font-size:14px;font-weight:500;text-align:left;cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
+.nav button:hover{background:var(--ks-bg-hover);color:var(--ks-fg-primary)}
+.nav button[aria-current="page"]{background:var(--ks-bg-selected);color:var(--ks-fg-primary)}
+.nav button[aria-current="page"] svg{color:var(--ks-accent-fg)}
+.nav button[aria-current="page"]::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--ks-accent)}
+.nav button:focus-visible{outline-offset:-2px}
+.nav .kb{margin-left:auto;font:11px var(--font-mono);color:var(--ks-fg-muted)}
+.side-foot{margin-top:auto;border-top:1px solid var(--ks-border-subtle);padding:12px 6px 4px;display:flex;flex-direction:column;gap:8px}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+/* main */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 24px;border-bottom:1px solid var(--ks-border-subtle);background:var(--ks-bg-surface);flex-wrap:wrap}
+.topbar .proto{font-size:12px;color:var(--ks-fg-muted);margin-right:auto}
+.content{flex:1;overflow:auto;padding:24px}
+.page{max-width:1040px;margin:0 auto}
+.page-h{display:flex;align-items:flex-start;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.page-h h1{margin:0;font:600 20px/28px var(--font-display)}
+.page-h p{margin:2px 0 0;color:var(--ks-fg-secondary);font-size:14px}
+.page-h .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+h2{font-size:16px;line-height:24px;font-weight:600;margin:0 0 12px}
+h3{font-size:14px;font-weight:600;margin:0 0 8px}
+.statusbar{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 12px;background:var(--ks-bg-surface);border-top:1px solid var(--ks-border-subtle);font-size:11px;color:var(--ks-fg-secondary);white-space:nowrap;overflow:hidden}
+.statusbar .r{margin-left:auto}
+/* primitives */
+.card{background:var(--ks-bg-raised);border:1px solid var(--ks-border-default);border-radius:var(--r-lg);padding:16px;box-shadow:var(--ks-shadow-1)}
+.grid{display:grid;gap:16px}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.stack{display:flex;flex-direction:column;gap:12px}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:32px;min-width:72px;padding:0 12px;border-radius:var(--r-md);border:1px solid transparent;font-weight:500;cursor:pointer;white-space:nowrap;transition:background var(--dur-fast),border-color var(--dur-fast)}
+.btn-p{background:var(--ks-accent);color:var(--ks-on-accent)}.btn-p:hover{background:var(--ks-accent-hover)}.btn-p:active{background:var(--ks-accent-pressed)}
+.btn-s{background:var(--ks-bg-raised);border-color:var(--ks-border-strong)}.btn-s:hover{background:var(--ks-bg-hover)}.btn-s:active{background:var(--ks-bg-overlay)}
+.btn-g{background:none;color:var(--ks-fg-secondary);min-width:0}.btn-g:hover{background:var(--ks-bg-hover);color:var(--ks-fg-primary)}
+.btn-d{background:var(--ks-danger-solid);color:var(--ks-on-danger)}.btn-d:hover{filter:brightness(.94)}
+.btn:disabled{background:var(--ks-bg-hover);color:var(--ks-fg-disabled);border-color:transparent;cursor:not-allowed;filter:none}
+.btn-sm{min-height:24px;min-width:24px;padding:0 6px;font-size:12px}
+.link{background:none;border:0;padding:0;color:var(--ks-accent-fg);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.input{min-height:32px;padding:5px 12px;background:var(--ks-bg-raised);border:1px solid var(--ks-border-strong);border-radius:var(--r-md);width:100%}
+.input:hover{border-color:var(--ks-fg-muted)}.input:focus{border-color:var(--ks-accent)}
+.input::placeholder{color:var(--ks-fg-muted)}
+label.lbl{display:block;font-size:12px;font-weight:600;color:var(--ks-fg-secondary);margin-bottom:4px}
+.help{font-size:12px;line-height:16px;color:var(--ks-fg-muted);margin-top:4px}
+kbd{display:inline-block;min-width:22px;padding:1px 6px;font:500 11px/16px var(--font-mono);text-align:center;background:var(--ks-bg-overlay);border:1px solid var(--ks-border-default);border-bottom-width:2px;border-radius:var(--r-sm);color:var(--ks-fg-primary)}
+.keys{display:inline-flex;gap:2px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--ks-bg-hover);color:var(--ks-fg-secondary)}
+.pill::before{content:"◌";font-size:10px}
+.pill.ok{background:var(--ks-success-bg);color:var(--ks-success-fg)}.pill.ok::before{content:"●"}
+.pill.warn{background:var(--ks-warning-bg);color:var(--ks-warning-fg)}.pill.warn::before{content:"▲"}
+.pill.err{background:var(--ks-danger-bg);color:var(--ks-danger-fg)}.pill.err::before{content:"✕"}
+.pill.info{background:var(--ks-info-bg);color:var(--ks-info-fg)}.pill.info::before{content:"i";font-weight:700;font-family:var(--font-mono)}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-radius:var(--r-md);border-left:3px solid;color:var(--ks-fg-primary)}
+.alert b{display:block}.alert svg{margin-top:2px}
+.alert.info{background:var(--ks-info-bg);border-color:var(--ks-info-fg)}.alert.info svg{color:var(--ks-info-fg)}
+.alert.warn{background:var(--ks-warning-bg);border-color:var(--ks-warning-fg)}.alert.warn svg{color:var(--ks-warning-fg)}
+.alert.err{background:var(--ks-danger-bg);border-color:var(--ks-danger-fg)}.alert.err svg{color:var(--ks-danger-fg)}
+.seg{display:inline-flex;padding:2px;gap:2px;background:var(--ks-bg-surface);border:1px solid var(--ks-border-default);border-radius:var(--r-md)}
+.seg button{min-height:26px;padding:0 10px;border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--ks-fg-secondary);font-weight:500;cursor:pointer;white-space:nowrap}
+.seg button:hover{background:var(--ks-bg-hover);color:var(--ks-fg-primary)}
+.seg button[aria-checked="true"]{background:var(--ks-bg-raised);color:var(--ks-fg-primary);border-color:var(--ks-border-strong);box-shadow:var(--ks-shadow-1)}
+.sw{display:flex;align-items:flex-start;gap:12px;cursor:pointer}
+.sw button{flex:none;position:relative;width:36px;height:20px;border-radius:999px;border:1px solid var(--ks-border-strong);background:transparent;cursor:pointer;padding:0;margin-top:1px;transition:background var(--dur-base)}
+.sw button::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--ks-fg-secondary);transition:transform var(--dur-base) var(--ease)}
+.sw button[aria-checked="true"]{background:var(--ks-accent);border-color:var(--ks-accent)}
+.sw button[aria-checked="true"]::after{transform:translateX(16px);background:var(--ks-on-accent)}
+.sw button:hover{background:var(--ks-bg-hover)}.sw button[aria-checked="true"]:hover{background:var(--ks-accent-hover)}
+.sw .t b{display:block;font-weight:500}
+.sw .t span{font-size:12px;color:var(--ks-fg-muted)}
+/* status card */
+.status{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.status .big{font:600 28px/36px var(--font-display);display:flex;align-items:center;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ks-success-fg);display:inline-block}
+.paused .dot{background:transparent;border:2px solid var(--ks-fg-muted)}
+.menu{position:absolute;z-index:100;background:var(--ks-bg-overlay);box-shadow:var(--ks-shadow-2);border-radius:var(--r-lg);padding:4px;min-width:180px}
+.menu button{display:block;width:100%;text-align:left;padding:6px 10px;border:0;background:none;border-radius:var(--r-md);cursor:pointer}
+.menu button:hover,.menu button:focus-visible{background:var(--ks-bg-hover)}
+/* tables */
+table{width:100%;border-collapse:collapse}
+th{position:sticky;top:0;text-align:left;font-size:12px;font-weight:600;color:var(--ks-fg-muted);background:var(--ks-bg-surface);height:32px;padding:0 12px;border-bottom:1px solid var(--ks-border-default);white-space:nowrap}
+td{height:36px;padding:4px 12px;border-bottom:1px solid var(--ks-border-subtle);vertical-align:middle}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--ks-bg-hover)}
+tbody tr[aria-selected="true"]{background:var(--ks-bg-selected);box-shadow:inset 2px 0 var(--ks-accent)}
+tbody tr:focus-visible{outline-offset:-2px}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.tbl{border:1px solid var(--ks-border-default);border-radius:var(--r-lg);overflow:auto;background:var(--ks-bg-raised)}
+/* hotkey capture */
+.hk{display:inline-flex;align-items:center;gap:8px;min-height:32px;min-width:220px;padding:3px 4px 3px 8px;background:var(--ks-bg-raised);border:1px solid var(--ks-border-strong);border-radius:var(--r-md);cursor:pointer;text-align:left}
+.hk:hover{border-color:var(--ks-fg-muted)}
+.hk .ph{color:var(--ks-fg-muted)}
+.hk.rec{border-color:var(--ks-accent);outline:2px solid var(--ks-focus-ring);outline-offset:2px}
+.hk.rec .rdot{width:6px;height:6px;border-radius:50%;background:var(--ks-danger-fg);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.2}}
+.hk.bad{border-color:var(--ks-danger-fg)}
+.hk .clr{margin-left:auto}
+.err-t{color:var(--ks-danger-fg);font-size:12px;margin-top:4px}
+/* macro */
+.mtool{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 12px;background:var(--ks-bg-surface);border:1px solid var(--ks-border-default);border-bottom:0;border-radius:var(--r-lg) var(--r-lg) 0 0}
+.mgrid{display:grid;grid-template-columns:minmax(0,1fr) 280px;border:1px solid var(--ks-border-default);border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden}
+.ed{position:relative;display:flex;background:var(--ks-bg-editor);min-height:300px;font:13px/20px var(--font-mono)}
+.gut{flex:none;width:44px;padding:8px 10px 8px 0;text-align:right;color:var(--ks-fg-muted);user-select:none;border-right:1px solid var(--ks-border-subtle);font-variant-numeric:tabular-nums}
+.gut div.e{color:var(--ks-danger-fg)}
+.gut div.e::before{content:"✕ ";font-size:10px}
+.code{position:relative;flex:1;overflow:auto}
+.code pre,.code textarea{margin:0;padding:8px 12px;font:inherit;white-space:pre;tab-size:2;border:0;min-height:100%;width:100%}
+.code pre{position:absolute;inset:0;pointer-events:none;color:var(--ks-fg-primary);overflow:hidden}
+.code textarea{position:relative;display:block;resize:none;background:transparent;color:transparent;caret-color:var(--ks-fg-primary);outline:none;min-height:300px;overflow:hidden}
+.code textarea::selection{background:color-mix(in srgb,var(--ks-accent) 35%,transparent);color:transparent}
+.ed:focus-within{box-shadow:inset 0 0 0 2px var(--ks-focus-ring)}
+.code textarea.plain{color:var(--ks-fg-primary);font-family:var(--font-sans);font-size:14px;white-space:pre-wrap}
+.k{color:var(--ks-syn-keyword)}.s{color:var(--ks-syn-string)}.n{color:var(--ks-syn-number)}.c{color:var(--ks-syn-comment);font-style:italic}.f{color:var(--ks-syn-function)}
+.sq{text-decoration:underline wavy var(--ks-danger-fg);text-underline-offset:3px}
+.mside{background:var(--ks-bg-surface);border-left:1px solid var(--ks-border-default);padding:16px;display:flex;flex-direction:column;gap:16px;overflow:auto}
+.mside h3{font-size:12px;color:var(--ks-fg-muted);margin:0}
+.limits{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:12px}
+.bpanel{border:1px solid var(--ks-border-default);border-radius:var(--r-lg);margin-top:12px;background:var(--ks-bg-surface);overflow:hidden}
+.tabs{display:flex;gap:4px;padding:0 8px;border-bottom:1px solid var(--ks-border-default)}
+.tabs button{height:32px;padding:0 10px;border:0;background:none;color:var(--ks-fg-secondary);font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px}
+.tabs button[aria-selected="true"]{color:var(--ks-fg-primary);border-bottom-color:var(--ks-accent)}
+.cnt{min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--ks-bg-hover);font-size:11px;line-height:16px;text-align:center}
+.cnt.e{background:var(--ks-danger-bg);color:var(--ks-danger-fg)}
+.prob{display:flex;align-items:center;gap:10px;min-height:28px;padding:4px 12px;border-bottom:1px solid var(--ks-border-subtle)}
+.prob .x{color:var(--ks-danger-fg)}
+.tpanel{min-height:96px;padding:4px 0}
+.out{padding:8px 12px;font:12px/18px var(--font-mono);white-space:pre-wrap}
+/* modal & picker */
+.scrim{position:fixed;inset:0;background:var(--ks-scrim);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.modal{width:440px;max-width:90vw;background:var(--ks-bg-overlay);border-radius:var(--r-xl);box-shadow:var(--ks-shadow-3);padding:20px}
+.modal h2{margin-bottom:8px}.modal .f{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.demo{width:min(760px,94vw);background:var(--ks-bg-canvas);border-radius:var(--r-xl);box-shadow:var(--ks-shadow-3);overflow:hidden}
+.demo .bar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--ks-bg-surface);border-bottom:1px solid var(--ks-border-default);flex-wrap:wrap}
+.fake{position:relative;height:300px;margin:16px;border:1px dashed var(--ks-border-strong);border-radius:var(--r-lg);padding:16px;background:var(--ks-bg-surface)}
+.fake .fld{margin-top:150px;padding:8px 12px;border:1px solid var(--ks-border-strong);border-radius:var(--r-md);background:var(--ks-bg-raised);font-size:14px}
+.caret{display:inline-block;width:1px;height:16px;background:var(--ks-fg-primary);vertical-align:-3px;animation:pulse 1s steps(1) infinite}
+.picker{position:absolute;width:320px;background:var(--ks-bg-overlay);border-radius:var(--r-xl);box-shadow:var(--ks-shadow-3);padding:16px;overflow:hidden;animation:pin var(--dur-fast) var(--ease)}
+@keyframes pin{from{opacity:0;transform:scale(.98)}}
+.picker h4{margin:0 0 10px;font-size:13px;font-weight:600}
+.picker .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.picker .opt{min-height:40px;justify-content:flex-start;padding:0 10px}
+.picker .opt .tag{margin-left:auto;font:11px var(--font-mono);color:var(--ks-fg-muted)}
+.picker .cancel{margin-top:8px;width:100%;justify-content:flex-start}
+.picker .timer{position:absolute;left:0;bottom:0;height:2px;background:var(--ks-accent);width:100%}
+.picker .timer.run{animation:tm 10s linear forwards}
+@keyframes tm{to{width:0}}
+.empty{text-align:center;padding:40px 16px;color:var(--ks-fg-muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.excl{list-style:none;margin:0;padding:0}
+.excl li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ks-border-subtle)}
+.excl li .mono{flex:1}
+[hidden]{display:none!important}
+@media (max-width:1100px){.g3{grid-template-columns:repeat(2,minmax(0,1fr))}.mgrid{grid-template-columns:1fr}.mside{border-left:0;border-top:1px solid var(--ks-border-default)}}
+@media (max-width:960px){.hide-md{display:none}}
+@media (max-width:900px){.app{grid-template-columns:56px 1fr}.nav .lbl,.nav .kb,.brand span,.side-foot .t{display:none}.nav button{justify-content:center;padding:6px 0}.brand{justify-content:center;padding:4px 0 14px}.content{padding:16px}.topbar{padding:8px 16px}.g2{grid-template-columns:1fr}}
+@media (forced-colors:active){.pill::before,.nav button[aria-current="page"]::before{forced-color-adjust:auto}.btn,.seg button,.hk,.sw button{border:1px solid ButtonText}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-logo" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 9h8l-2.5-2.5M16 15H8l2.5 2.5"/></symbol>
+<symbol id="i-ov" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+<symbol id="i-lang" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+<symbol id="i-kb" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 9l-3 3 3 3M14 9l3 3-3 3"/></symbol>
+<symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
+<symbol id="i-act" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+</svg>
+
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><svg class="i" style="width:20px;height:20px"><use href="#i-logo"/></svg><span>KeySwitch</span></div>
+  <nav aria-label="Разделы" data-i18n-aria="nav.aria">
+    <ul class="nav" id="nav">
+      <li><button data-sec="overview" aria-current="page"><svg class="i"><use href="#i-ov"/></svg><span class="lbl" data-i18n="nav.overview">Обзор</span><span class="kb">^1</span></button></li>
+      <li><button data-sec="languages" tabindex="-1"><svg class="i"><use href="#i-lang"/></svg><span class="lbl" data-i18n="nav.languages">Языки и раскладки</span><span class="kb">^2</span></button></li>
+      <li><button data-sec="hotkeys" tabindex="-1"><svg class="i"><use href="#i-kb"/></svg><span class="lbl" data-i18n="nav.hotkeys">Горячие клавиши</span><span class="kb">^3</span></button></li>
+      <li><button data-sec="macro" tabindex="-1"><svg class="i"><use href="#i-code"/></svg><span class="lbl">Macro Studio</span><span class="kb">^4</span></button></li>
+      <li><button data-sec="settings" tabindex="-1"><svg class="i"><use href="#i-set"/></svg><span class="lbl" data-i18n="nav.settings">Настройки</span><span class="kb">^5</span></button></li>
+      <li><button data-sec="diagnostics" tabindex="-1"><svg class="i"><use href="#i-act"/></svg><span class="lbl" data-i18n="nav.diagnostics">Диагностика</span><span class="kb">^6</span></button></li>
+    </ul>
+  </nav>
+  <div class="side-foot">
+    <div class="sw" data-sw="active"><button role="switch" aria-checked="true" aria-labelledby="sw-act-l" id="sw-act"></button><span class="t" id="sw-act-l"><b data-i18n="side.active">Активно</b><span id="sw-act-sub" data-i18n="side.activeSub">Горячие клавиши работают</span></span></div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <span class="proto" data-i18n="top.proto">Прототип · данные-заглушки · код не исполняется</span>
+    <span class="muted" data-i18n="top.theme">Тема</span>
+    <div class="seg" role="radiogroup" aria-label="Тема" id="theme">
+      <button role="radio" aria-checked="false" data-v="dark" data-i18n="theme.dark">Тёмная</button>
+      <button role="radio" aria-checked="false" data-v="light" tabindex="-1" data-i18n="theme.light">Светлая</button>
+      <button role="radio" aria-checked="true" data-v="system" tabindex="-1" data-i18n="theme.system">Системная</button>
+    </div>
+    <div class="seg" role="radiogroup" aria-label="Язык интерфейса" id="uilang">
+      <button role="radio" aria-checked="true" data-v="ru">RU</button>
+      <button role="radio" aria-checked="false" data-v="en" tabindex="-1">EN</button>
+    </div>
+    <button class="btn btn-s" id="open-picker" data-i18n="top.picker">Демо: окно выбора языка</button>
+  </div>
+  <div class="content" id="content">
+
+<!-- OVERVIEW -->
+<section class="page" id="overview" aria-labelledby="h-ov">
+  <div class="page-h"><div><h1 id="h-ov" data-i18n="ov.h">Обзор</h1><p data-i18n="ov.p">Состояние KeySwitch и последние операции</p></div></div>
+  <div class="alert warn" id="pause-banner" hidden style="margin-bottom:16px"><svg class="i"><use href="#i-pause"/></svg><div><b id="pause-title">KeySwitch приостановлен до 15:10</b><span>Горячие клавиши сняты с регистрации и доступны другим программам.</span></div></div>
+  <div class="card status" id="st-card" style="margin-bottom:16px">
+    <div><div class="big"><span class="dot"></span><span id="st-big" data-i18n="ov.active">Активно</span></div><div class="sec" id="st-sub">Горячие клавиши зарегистрированы · EN ⇄ RU</div></div>
+    <div style="margin-left:auto;position:relative">
+      <button class="btn btn-s" id="pause-btn" aria-haspopup="menu" aria-expanded="false"><svg class="i"><use href="#i-pause"/></svg><span data-i18n="ov.pause">Приостановить</span> ▾</button>
+      <div class="menu" role="menu" id="pause-menu" hidden style="right:0;top:36px">
+        <button role="menuitem" data-min="15">15 минут</button><button role="menuitem" data-min="60">1 час</button><button role="menuitem" data-min="0">До перезапуска</button>
+      </div>
+    </div>
+  </div>
+  <div class="grid g3">
+    <div class="card stack"><h2 data-i18n="ov.conv">Исправление раскладки</h2><div class="keys" data-show="conv"></div><div class="sec">English ⇄ Русский</div><div><button class="link" data-go="hotkeys" data-i18n="ov.change">Изменить сочетание</button></div></div>
+    <div class="card stack"><h2 data-i18n="ov.macro">Макрос</h2><div class="keys" data-show="macro"></div><div class="row"><span class="pill ok">Включён</span><span class="sec">JavaScript · слот 1</span></div><div><button class="link" data-go="macro" data-i18n="ov.openMs">Открыть Macro Studio</button></div></div>
+    <div class="card stack"><h2 data-i18n="ov.last">Последняя операция</h2><div><span class="num">14:02:31</span> · <span class="mono">telegram.exe</span></div><div class="row"><span class="pill ok">Выполнено</span><span class="sec">Конвертация · Поле</span></div><div><button class="link" data-go="diagnostics" data-i18n="ov.log">Открыть журнал</button></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2 data-i18n="ov.how">Как это работает</h2>
+    <div class="row" style="gap:16px"><span class="mono">Ghbdtn, rfr ltkf?</span><span class="muted">→</span><span class="keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Space</kbd></span><span class="muted">→</span><span class="mono">Привет, как дела?</span></div>
+    <p class="sec" style="margin:8px 0 0">Сначала обрабатывается выделение, затем всё однострочное поле, в многострочном документе — последний фрагмент до разрыва строки. Если замену нельзя выполнить безопасно, KeySwitch ничего не меняет.</p></div>
+</section>
+
+<!-- LANGUAGES -->
+<section class="page" id="languages" aria-labelledby="h-la" hidden>
+  <div class="page-h"><div><h1 id="h-la" data-i18n="la.h">Языки и раскладки</h1><p data-i18n="la.p">Пара языков, раскладки Windows и проверка конвертации</p></div></div>
+  <div class="grid g2">
+    <div class="card stack"><h2>English ⇄ Русский</h2>
+      <div class="row"><span class="mono" style="min-width:150px">US QWERTY</span><span class="pill ok">Установлена</span></div>
+      <div class="row"><span class="mono" style="min-width:150px">Русская (ЙЦУКЕН)</span><span class="pill ok">Установлена</span></div>
+      <p class="sec" style="margin:0">Направление определяется по составу текста; активная раскладка учитывается только при равенстве. При низкой уверенности замена не выполняется.</p>
+      <div class="sw"><button role="switch" aria-checked="true" aria-labelledby="sw-l1"></button><span class="t" id="sw-l1"><b>Переключать раскладку после исправления</b><span>На язык исправленного текста</span></span></div>
+    </div>
+    <div class="card stack"><h2>Попробовать</h2>
+      <div><label class="lbl" for="try">Текст для проверки</label><input class="input mono" id="try" autocomplete="off" spellcheck="false" value="Ghbdtn, rfr ltkf?"><div class="help"><svg class="i" style="width:12px;height:12px;vertical-align:-1px"><use href="#i-lock"/></svg> Не сохраняется и не записывается в журнал</div></div>
+      <div><span class="lbl">Результат</span><div class="mono" id="try-out" style="min-height:20px">Привет, как дела?</div></div>
+      <div class="row"><span class="pill info">EN → RU</span><span class="pill ok" id="try-conf">Уверенность: высокая</span></div>
+      <div class="help">В прототипе — упрощённая посимвольная таблица без языковой модели.</div>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:16px">Поддержка других языков (украинский, немецкий, французский) появится в следующих версиях.</p>
+  <p><button class="btn btn-s" data-picker data-i18n="top.picker">Демо: окно выбора языка</button></p>
+</section>
+
+<!-- HOTKEYS -->
+<section class="page" id="hotkeys" aria-labelledby="h-hk" hidden>
+  <div class="page-h"><div><h1 id="h-hk" data-i18n="hk.h">Горячие клавиши</h1><p data-i18n="hk.p">Два независимых глобальных сочетания</p></div></div>
+  <div class="tbl"><table>
+    <thead><tr><th scope="col">Действие</th><th scope="col">Сочетание</th><th scope="col">Состояние</th><th scope="col"><span class="sr">Сброс</span></th></tr></thead>
+    <tbody id="hk-body">
+      <tr data-hk="conv" style="cursor:default"><td><b>Исправить раскладку</b></td><td><div class="hk-wrap"></div></td><td class="hk-st"></td><td><button class="btn btn-g btn-sm" data-reset="conv">По умолчанию</button></td></tr>
+      <tr data-hk="macro" style="cursor:default"><td><b>Запустить макрос</b></td><td><div class="hk-wrap"></div></td><td class="hk-st"></td><td><button class="btn btn-g btn-sm" data-reset="macro">По умолчанию</button></td></tr>
+    </tbody></table></div>
+  <p class="help" id="hk-rules" style="margin-top:12px">2–3 клавиши, обязательно одна обычная (не только Ctrl/Alt/Shift). Сочетания, зарезервированные Windows, недоступны. Esc — отменить запись, Tab — выйти.</p>
+  <div class="alert info" style="margin-top:16px"><svg class="i"><use href="#i-info"/></svg><div><b>Демо</b>Попробуйте <span class="keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd></span> — имитация сочетания, занятого другим приложением; <span class="keys"><kbd>Alt</kbd><kbd>F4</kbd></span> — зарезервировано Windows; одиночный <kbd>Ctrl</kbd> — нет обычной клавиши.</div></div>
+  <div class="card" style="margin-top:16px"><h2>Как обрабатывается нажатие</h2><p class="sec" style="margin:0">KeySwitch ждёт, пока вы отпустите модификаторы (до 1 секунды), и только потом работает с полем ввода. Если клавиши удерживаются дольше — операция отменяется.</p></div>
+  <div aria-live="polite" class="sr" id="hk-live"></div>
+</section>
+
+<!-- MACRO -->
+<section class="page" id="macro" aria-labelledby="h-ms" hidden>
+  <div class="page-h"><div><h1 id="h-ms">Macro Studio <span class="muted" style="font-size:14px;font-weight:400">· <span data-i18n="ms.slot">Слот 1</span><span id="dirty" hidden> ●</span></span></h1><p data-i18n="ms.p">Текстовый макрос или скрипт в изолированной песочнице</p></div>
+    <div class="acts"><button class="btn btn-s" id="m-check"><svg class="i"><use href="#i-check"/></svg><span data-i18n="ms.check">Проверить</span></button><button class="btn btn-s" id="m-run"><svg class="i"><use href="#i-play"/></svg><span data-i18n="ms.run">Запустить тест</span></button><button class="btn btn-p" id="m-save" data-i18n="ms.save">Сохранить</button></div></div>
+  <div class="alert err" id="m-alert" hidden style="margin-bottom:12px"><svg class="i"><use href="#i-warn"/></svg><div><b>Горячая клавиша макроса не будет работать, пока есть ошибки</b>Исправьте проблемы и сохраните слот.</div></div>
+  <div class="mtool">
+    <span class="muted" id="type-l">Тип</span>
+    <div class="seg" role="radiogroup" aria-labelledby="type-l" id="mtype">
+      <button role="radio" aria-checked="false" data-v="text" tabindex="-1" data-i18n="ms.text">Текст</button>
+      <button role="radio" aria-checked="true" data-v="js">JavaScript</button>
+      <button role="radio" aria-checked="false" data-v="py" tabindex="-1">Python</button>
+    </div>
+    <div class="sw"><button role="switch" aria-checked="true" aria-labelledby="sw-me"></button><span class="t" id="sw-me"><b>Включён</b></span></div>
+    <span class="muted hide-md" style="margin-left:auto">Горячая клавиша</span><span class="keys" data-show="macro"></span>
+  </div>
+  <div class="mgrid">
+    <div class="ed"><div class="gut" id="gut" aria-hidden="true"></div><div class="code"><pre id="hl" aria-hidden="true"></pre><textarea id="src" spellcheck="false" autocomplete="off" aria-label="Код макроса" wrap="off"></textarea></div></div>
+    <div class="mside">
+      <div class="stack" id="perm-block"><h3>Разрешения</h3>
+        <div class="sw"><button role="switch" aria-checked="false" aria-labelledby="sw-clip" id="clip"></button><span class="t" id="sw-clip"><b>Чтение буфера обмена</b><span>Макрос сможет прочитать текст из буфера при запуске</span></span></div>
+        <div><span class="lbl" id="ctx-l">Контекст</span><div class="seg" role="radiogroup" aria-labelledby="ctx-l" id="mctx"><button role="radio" aria-checked="true" data-v="sel">Выделение</button><button role="radio" aria-checked="false" data-v="field" tabindex="-1">Всё поле</button></div></div>
+        <div class="help">Нет доступа к файлам, сети и оболочке. Клавиши — только Enter, Tab, стрелки, Backspace, Delete, Home, End.</div>
+      </div>
+      <div class="stack"><h3>Лимиты</h3><div class="limits"><span class="muted">Время</span><span class="num">2 с</span><span class="muted">Память</span><span class="num">64 МБ</span><span class="muted">Вывод</span><span class="num">100 000 символов</span></div></div>
+      <div><label class="lbl" for="tin">Тестовые входные данные</label><textarea class="input" id="tin" rows="3" autocomplete="off" spellcheck="false">  привет,   мир  </textarea><div class="help">Не сохраняется. Реальное поле ввода не используется.</div></div>
+    </div>
+  </div>
+  <div class="bpanel">
+    <div class="tabs" role="tablist" aria-label="Нижняя панель"><button role="tab" aria-selected="true" aria-controls="tp-prob" id="t-prob">Проблемы <span class="cnt" id="pcnt">0</span></button><button role="tab" aria-selected="false" aria-controls="tp-out" id="t-out" tabindex="-1">Вывод</button></div>
+    <div class="tpanel" role="tabpanel" id="tp-prob" aria-labelledby="t-prob"><div class="muted out" id="plist">Нажмите «Проверить», чтобы проверить код в песочнице.</div></div>
+    <div class="tpanel" role="tabpanel" id="tp-out" aria-labelledby="t-out" hidden><div class="out" id="olist">Нет запусков.</div></div>
+  </div>
+  <div class="help" id="m-hint">Демо: удалите «)» или добавьте <span class="mono">fetch("…")</span> и нажмите «Проверить». Ctrl+S — сохранить, F5 — тест.</div>
+</section>
+
+<!-- SETTINGS -->
+<section class="page" id="settings" aria-labelledby="h-se" hidden>
+  <div class="page-h"><div><h1 id="h-se" data-i18n="se.h">Настройки</h1><p data-i18n="se.p">Запуск, интерфейс, поведение и исключения</p></div></div>
+  <div class="stack" style="gap:16px">
+    <div class="card stack"><h2 data-i18n="se.general">Общие</h2>
+      <div class="sw"><button role="switch" aria-checked="false" aria-labelledby="sw-auto" id="auto"></button><span class="t" id="sw-auto"><b>Запускать вместе с Windows</b><span>KeySwitch будет работать в фоне после входа в систему</span></span></div>
+      <div id="auto-err" hidden class="alert err"><svg class="i"><use href="#i-warn"/></svg><div><b>Не удалось включить автозапуск</b>Запись в параметры запуска запрещена политикой. Подробности — в Диагностике.</div></div>
+      <div class="sw"><button role="switch" aria-checked="false" aria-labelledby="sw-autofail" id="autofail"></button><span class="t" id="sw-autofail"><b class="muted" style="font-weight:400">Демо: имитировать ошибку автозапуска</b></span></div>
+    </div>
+    <div class="card stack"><h2 data-i18n="se.behavior">Поведение</h2>
+      <div class="sw"><button role="switch" aria-checked="true" aria-labelledby="sw-snd"></button><span class="t" id="sw-snd"><b>Звук при отмене операции</b><span>Короткий системный звук, когда KeySwitch не выполнил замену</span></span></div>
+    </div>
+    <div class="card stack"><h2 data-i18n="se.excl">Исключения</h2>
+      <p class="sec" style="margin:0">В этих приложениях KeySwitch ничего не делает.</p>
+      <ul class="excl" id="excl"></ul>
+      <div class="row"><input class="input mono" id="ex-in" placeholder="имя.exe" style="max-width:240px" aria-label="Имя приложения"><button class="btn btn-s" id="ex-add">Добавить</button></div>
+      <div class="err-t" id="ex-err" hidden></div>
+      <h3 style="margin-top:8px"><svg class="i" style="vertical-align:-3px"><use href="#i-lock"/></svg> Всегда исключено</h3>
+      <div class="sec">Поля паролей · окна, запущенные от имени администратора · защищённый рабочий стол</div>
+    </div>
+    <div class="card stack"><h2 data-i18n="se.privacy">Приватность</h2><p class="sec" style="margin:0">Весь текст обрабатывается на этом компьютере. KeySwitch не выполняет сетевых запросов, не собирает телеметрию и не хранит набранный текст.</p></div>
+    <div class="card stack"><h2 data-i18n="se.about">О программе</h2><div class="sec">KeySwitch <span class="num">0.1.0</span> · ядро <span class="num">0.1.0</span></div><div class="row"><span class="pill warn">Сборка без цифровой подписи</span></div></div>
+  </div>
+</section>
+
+<!-- DIAGNOSTICS -->
+<section class="page" id="diagnostics" aria-labelledby="h-di" hidden>
+  <div class="page-h"><div><h1 id="h-di" data-i18n="di.h">Диагностика</h1><p data-i18n="di.p">Состояние компонентов и журнал операций</p></div><div class="acts"><button class="btn btn-s">Скопировать отчёт</button><button class="btn btn-g" id="clear-log">Очистить журнал</button></div></div>
+  <div class="alert info" style="margin-bottom:16px"><svg class="i"><use href="#i-lock"/></svg><div><b data-i18n="di.bannerH">Журнал содержит только метаданные</b><span data-i18n="di.banner">Время, приложение, результат и причина. Текст, который вы набираете, и содержимое буфера обмена никогда не записываются.</span></div></div>
+  <div class="grid g3" style="margin-bottom:16px">
+    <div class="card row"><span style="flex:1">Клавиша конвертации</span><span class="pill ok">Зарегистрирована</span></div>
+    <div class="card row"><span style="flex:1">Клавиша макроса</span><span class="pill ok">Зарегистрирована</span></div>
+    <div class="card row"><span style="flex:1">Раскладки EN / RU</span><span class="pill ok">Найдены</span></div>
+    <div class="card row"><span style="flex:1">Среда JavaScript</span><span class="pill ok">Готова</span></div>
+    <div class="card row"><span style="flex:1">Среда Python</span><span class="pill ok">Готова</span></div>
+    <div class="card row"><span style="flex:1">Автозапуск</span><span class="pill" id="d-auto">Выключен</span></div>
+  </div>
+  <div class="row" style="margin-bottom:12px"><div class="seg" role="radiogroup" aria-label="Фильтр" id="dfilter"><button role="radio" aria-checked="true" data-v="all">Все</button><button role="radio" aria-checked="false" data-v="ok" tabindex="-1">Выполнено</button><button role="radio" aria-checked="false" data-v="warn" tabindex="-1">Отклонено</button><button role="radio" aria-checked="false" data-v="err" tabindex="-1">Ошибки</button></div><input class="input mono" id="dq" placeholder="Приложение…" style="max-width:200px;margin-left:auto" aria-label="Поиск по приложению"></div>
+  <div class="tbl" style="max-height:320px"><table aria-label="Журнал операций"><thead><tr><th scope="col">Время</th><th scope="col">Приложение</th><th scope="col">Операция</th><th scope="col" class="hide-md">Объём</th><th scope="col" class="hide-md">Способ</th><th scope="col">Результат</th><th scope="col">Причина</th><th scope="col" style="text-align:right">мс</th></tr></thead><tbody id="log"></tbody></table><div class="empty" id="log-empty" hidden>Журнал пуст. Здесь появятся операции после первого нажатия горячей клавиши.</div></div>
+  <div class="card" id="detail" style="margin-top:12px" hidden></div>
+</section>
+  </div>
+</div>
+<footer class="statusbar" aria-label="Строка состояния"><span id="sb-st">● Активно</span><span><span data-i18n="sb.conv">Конвертация</span> <span class="mono" id="sb-conv"></span></span><span><span data-i18n="sb.macro">Макрос</span> <span class="mono" id="sb-macro"></span></span><span class="r" id="sb-pos"></span><span data-i18n="sb.local">Локально · без сети</span></footer>
+</div>
+
+<div class="scrim" id="modal" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mh"><h2 id="mh">Очистить журнал?</h2><p class="sec" style="margin:0">Все записи журнала будут удалены с этого компьютера. Это действие нельзя отменить.</p><div class="f"><button class="btn btn-s" id="m-cancel">Отмена</button><button class="btn btn-d" id="m-ok">Очистить журнал</button></div></div></div>
+
+<div class="scrim" id="pdemo" hidden><div class="demo" role="region" aria-label="Демонстрация окна выбора языка">
+  <div class="bar"><b>Демо: смешанный текст</b><span class="muted">Положение</span><div class="seg" role="radiogroup" aria-label="Положение" id="ppos"><button role="radio" aria-checked="true" data-v="caret">У каретки</button><button role="radio" aria-checked="false" data-v="center" tabindex="-1">Центр экрана</button></div><button class="btn btn-s" id="p-again">Повторить</button><button class="btn btn-g" id="p-close" style="margin-left:auto">Закрыть демо</button></div>
+  <div class="fake" id="fake"><span class="muted">Окно другого приложения (имитация) · после нажатия горячей клавиши</span>
+    <div class="fld" id="fld"><span id="fld-t">Привет, rfr ltkf?</span><span class="caret" id="caret"></span></div>
+    <div class="picker" role="dialog" aria-labelledby="pk-h" id="picker">
+      <h4 id="pk-h">Смешанный текст — исправить на:</h4>
+      <div class="opts"><button class="btn btn-s opt" data-pick="ru" aria-keyshortcuts="1"><kbd>1</kbd>Русский<span class="tag">RU</span></button><button class="btn btn-s opt" data-pick="en" aria-keyshortcuts="2"><kbd>2</kbd>English<span class="tag">EN</span></button></div>
+      <button class="btn btn-g cancel" data-pick="cancel" aria-keyshortcuts="Escape"><kbd>Esc</kbd>Отмена — ничего не менять</button>
+      <div class="timer" id="ptimer"></div>
+    </div>
+  </div>
+  <p class="help" style="margin:0 16px 16px" id="p-res">Клавиши 1 / 2 / Esc, стрелки + Enter или мышь. Через 10 с — автоматическая отмена.</p>
+</div></div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+/* i18n */
+const EN={"nav.overview":"Overview","nav.languages":"Languages & Layouts","nav.hotkeys":"Hotkeys","nav.settings":"Settings","nav.diagnostics":"Diagnostics","nav.aria":"Sections",
+"side.active":"Active","side.activeSub":"Hotkeys are on","top.proto":"Prototype · placeholder data · code is not executed","top.theme":"Theme","theme.dark":"Dark","theme.light":"Light","theme.system":"System","top.picker":"Demo: language picker",
+"ov.h":"Overview","ov.p":"KeySwitch status and recent operations","ov.active":"Active","ov.pause":"Pause","ov.conv":"Layout correction","ov.macro":"Macro","ov.change":"Change shortcut","ov.openMs":"Open Macro Studio","ov.last":"Last operation","ov.log":"Open log","ov.how":"How it works",
+"la.h":"Languages & Layouts","la.p":"Language pair, Windows layouts and a conversion sandbox","hk.h":"Hotkeys","hk.p":"Two independent global shortcuts",
+"ms.slot":"Slot 1","ms.p":"Text macro or a script in an isolated sandbox","ms.check":"Check","ms.run":"Test run","ms.save":"Save","ms.text":"Text",
+"se.h":"Settings","se.p":"Startup, interface, behavior and exclusions","se.general":"General","se.behavior":"Behavior","se.excl":"Exclusions","se.privacy":"Privacy","se.about":"About",
+"di.h":"Diagnostics","di.p":"Component status and operation log","di.bannerH":"The log contains metadata only","di.banner":"Time, application, result and reason. What you type and clipboard contents are never recorded.",
+"sb.conv":"Convert","sb.macro":"Macro","sb.local":"Local · offline"};
+const RU={};$$('[data-i18n]').forEach(e=>RU[e.dataset.i18n]=e.textContent);
+let lang='ru';
+function setLang(l){lang=l;document.documentElement.lang=l;const d=l==='en'?EN:RU;$$('[data-i18n]').forEach(e=>{const v=d[e.dataset.i18n];if(v)e.textContent=v});$('nav').setAttribute('aria-label',l==='en'?'Sections':'Разделы');renderStatus()}
+/* segmented controls: radiogroup with roving tabindex */
+function seg(el,cb){const bs=[...el.querySelectorAll('[role=radio]')];function pick(b,focus){bs.forEach(x=>{const on=x===b;x.setAttribute('aria-checked',on);x.tabIndex=on?0:-1});if(focus)b.focus();cb&&cb(b.dataset.v)}
+bs.forEach((b,i)=>{b.onclick=()=>pick(b);b.onkeydown=e=>{let j=null;if(e.key==='ArrowRight'||e.key==='ArrowDown')j=(i+1)%bs.length;if(e.key==='ArrowLeft'||e.key==='ArrowUp')j=(i-1+bs.length)%bs.length;if(j!==null){e.preventDefault();pick(bs[j],true)}}});return pick}
+seg($('#theme'),v=>document.documentElement.dataset.theme=v);
+seg($('#uilang'),setLang);
+/* switches */
+$$('.sw').forEach(w=>{const b=w.querySelector('button');w.addEventListener('click',e=>{if(e.target!==b)b.click()});b.addEventListener('click',e=>{e.stopPropagation();b.setAttribute('aria-checked',b.getAttribute('aria-checked')!=='true');b.dispatchEvent(new Event('change'))})});
+/* navigation */
+const navBs=$$('#nav button');
+function go(id,focus){navBs.forEach(b=>{const on=b.dataset.sec===id;on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});$$('section.page').forEach(s=>s.hidden=s.id!==id);$('#content').scrollTop=0;renderStatus()}
+navBs.forEach((b,i)=>{b.onclick=()=>go(b.dataset.sec);b.onkeydown=e=>{let j=null;if(e.key==='ArrowDown')j=(i+1)%navBs.length;if(e.key==='ArrowUp')j=(i-1+navBs.length)%navBs.length;if(e.key==='Home')j=0;if(e.key==='End')j=navBs.length-1;if(j!==null){e.preventDefault();go(navBs[j].dataset.sec,true)}}});
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&!e.altKey&&!e.shiftKey&&/^Digit[1-6]$/.test(e.code)&&!rec){e.preventDefault();go(navBs[+e.code[5]-1].dataset.sec,true)}});
+/* pause */
+let paused=false,pauseText='';
+const actSw=$('#sw-act');
+function setPaused(p,mins){paused=p;actSw.setAttribute('aria-checked',!p);if(p){const t=new Date(Date.now()+(mins||60)*60000);pauseText=mins===0?'до перезапуска':'до '+t.toTimeString().slice(0,5)}renderStatus()}
+actSw.addEventListener('change',()=>setPaused(actSw.getAttribute('aria-checked')!=='true',60));
+const pm=$('#pause-menu'),pb=$('#pause-btn');
+pb.onclick=()=>{if(paused){setPaused(false);return}const o=pm.hidden;pm.hidden=!o;pb.setAttribute('aria-expanded',o);if(o)pm.querySelector('button').focus()};
+pm.onkeydown=e=>{const it=[...pm.querySelectorAll('button')],i=it.indexOf(document.activeElement);if(e.key==='Escape'){pm.hidden=true;pb.setAttribute('aria-expanded',false);pb.focus()}if(e.key==='ArrowDown'){e.preventDefault();it[(i+1)%it.length].focus()}if(e.key==='ArrowUp'){e.preventDefault();it[(i-1+it.length)%it.length].focus()}};
+pm.querySelectorAll('button').forEach(b=>b.onclick=()=>{pm.hidden=true;pb.setAttribute('aria-expanded',false);setPaused(true,+b.dataset.min);pb.focus()});
+document.addEventListener('click',e=>{if(!pm.hidden&&!pm.contains(e.target)&&!pb.contains(e.target)){pm.hidden=true;pb.setAttribute('aria-expanded',false)}});
+/* hotkeys */
+const DEF={conv:['Ctrl','Shift','Space'],macro:['Ctrl','Alt','M']};
+const hk={conv:[...DEF.conv],macro:[...DEF.macro]},hkErr={conv:'',macro:''};
+const NAMES={conv:'Исправить раскладку',macro:'Запустить макрос'};
+const RESERVED=['Alt+Tab','Alt+F4','Ctrl+Esc','Ctrl+Alt+Delete','Ctrl+Shift+Esc','Alt+Space','Alt+Esc'];
+const TAKEN=['Ctrl+Alt+T'];
+const MODS=['Ctrl','Alt','Shift'];
+let rec=null,recMods=[];
+function kbd(keys){return keys.map(k=>'<kbd>'+k+'</kbd>').join('')}
+function aria(keys){return keys.map(k=>({Ctrl:'Control',Space:'Пробел'}[k]||k)).join(' плюс ')}
+function keyName(e){const c=e.code;if(/^Key[A-Z]$/.test(c))return c.slice(3);if(/^Digit\d$/.test(c))return c.slice(5);if(/^F\d{1,2}$/.test(c))return c;const m={Space:'Space',Escape:'Esc',Enter:'Enter',Backspace:'Backspace',Delete:'Delete',Insert:'Insert',Home:'Home',End:'End',PageUp:'PgUp',PageDown:'PgDn',ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Backquote:'`',Minus:'-',Equal:'=',BracketLeft:'[',BracketRight:']',Semicolon:';',Quote:"'",Comma:',',Period:'.',Slash:'/',Backslash:'\\'};return m[c]||null}
+function renderHK(){
+  ['conv','macro'].forEach(id=>{const tr=$('tr[data-hk='+id+']'),w=tr.querySelector('.hk-wrap'),st=tr.querySelector('.hk-st');const r=rec===id,keys=r?recMods:hk[id];
+    w.innerHTML='<button class="hk'+(r?' rec':'')+(hkErr[id]?' bad':'')+'" data-cap="'+id+'" aria-label="Сочетание для «'+NAMES[id]+'»: '+(keys.length?aria(keys):'не задано')+'. Нажмите, чтобы изменить" aria-describedby="hk-rules'+(hkErr[id]?' err-'+id:'')+'">'+(r?'<span class="rdot"></span>':'')+'<span class="keys">'+(keys.length?kbd(keys):'')+'</span>'+(r&&!keys.length?'<span class="ph">Нажмите сочетание… Esc — отмена</span>':'')+(!r&&!keys.length?'<span class="ph">Не задано</span>':'')+'</button>'+(hkErr[id]?'<div class="err-t" id="err-'+id+'">'+hkErr[id]+'</div>':'');
+    st.innerHTML=paused?'<span class="pill">Приостановлено</span>':hkErr[id]?'<span class="pill err">Не изменено</span>':hk[id].length?'<span class="pill ok">Зарегистрировано</span>':'<span class="pill">Не задано</span>';
+    w.querySelector('.hk').onclick=()=>startRec(id)});
+  $$('[data-show=conv]').forEach(e=>e.innerHTML=kbd(hk.conv));$$('[data-show=macro]').forEach(e=>e.innerHTML=kbd(hk.macro));
+  $('#sb-conv').textContent=hk.conv.join('+');$('#sb-macro').textContent=hk.macro.join('+')}
+function live(t){$('#hk-live').textContent=t}
+function startRec(id){rec=id;recMods=[];hkErr[id]='';renderHK();$('[data-cap='+id+']').focus();live('Запись сочетания. Нажмите клавиши.')}
+function stopRec(focus){const id=rec;rec=null;recMods=[];renderHK();if(focus&&id)$('[data-cap='+id+']').focus()}
+document.addEventListener('keydown',e=>{if(!rec)return;const id=rec;
+  if(e.key==='Tab'){stopRec(false);return}
+  e.preventDefault();
+  if(e.key==='Escape'&&!e.ctrlKey&&!e.altKey&&!e.shiftKey){stopRec(true);live('Запись отменена');return}
+  const mods=[];if(e.ctrlKey)mods.push('Ctrl');if(e.altKey)mods.push('Alt');if(e.shiftKey)mods.push('Shift');
+  if(['Control','Alt','Shift','Meta','OS'].includes(e.key)){recMods=mods;renderHK();$('[data-cap='+id+']').focus();return}
+  if(e.metaKey){hkErr[id]='Клавиша Win в сочетаниях не поддерживается.';stopRec(true);live(hkErr[id]);return}
+  const k=keyName(e);if(!k)return;
+  const combo=[...mods,k],s=combo.join('+'),other=id==='conv'?'macro':'conv';
+  let err='';
+  if(!mods.length)err='Добавьте Ctrl, Alt или Shift: одиночная клавиша будет мешать обычному набору.';
+  else if(combo.length>3)err='Не больше трёх клавиш.';
+  else if(RESERVED.includes(s))err='Сочетание '+s+' зарезервировано Windows.';
+  else if(hk[other].join('+')===s)err='Уже используется для «'+NAMES[other]+'».';
+  else if(TAKEN.includes(s))err='Сочетание '+s+' занято другим приложением. Выберите другое — прежнее продолжает работать.';
+  hkErr[id]=err;if(!err)hk[id]=combo;stopRec(true);live(err||('Сочетание '+s+' зарегистрировано'))});
+document.addEventListener('keyup',e=>{if(rec&&['Control','Alt','Shift'].includes(e.key)){recMods=recMods.filter(m=>m!==(e.key==='Control'?'Ctrl':e.key));renderHK();$('[data-cap='+rec+']').focus()}});
+$$('[data-reset]').forEach(b=>b.onclick=()=>{const id=b.dataset.reset;hk[id]=[...DEF[id]];hkErr[id]='';renderHK()});
+/* status rendering */
+function renderStatus(){const en=lang==='en';
+  $('#st-card').classList.toggle('paused',paused);
+  $('#st-big').textContent=paused?(en?'Paused':'Приостановлено'):(en?'Active':'Активно');
+  $('#st-sub').textContent=paused?(en?'Hotkeys are unregistered ':'Горячие клавиши сняты с регистрации · ')+pauseText:(en?'Hotkeys registered · EN ⇄ RU':'Горячие клавиши зарегистрированы · EN ⇄ RU');
+  pb.querySelector('span').textContent=paused?(en?'Resume':'Возобновить'):(en?'Pause':'Приостановить');
+  $('#pause-banner').hidden=!paused;$('#pause-title').textContent='KeySwitch приостановлен '+pauseText;
+  $('#sw-act-l b').textContent=paused?(en?'Paused':'Приостановлено'):(en?'Active':'Активно');
+  $('#sw-act-sub').textContent=paused?pauseText:(en?'Hotkeys are on':'Горячие клавиши работают');
+  $('#sb-st').textContent=paused?'◌ '+(en?'Paused':'Приостановлено')+' '+pauseText:'● '+(en?'Active':'Активно');
+  $('#sb-pos').textContent=$('#macro').hidden?'':posText;renderHK()}
+/* conversion sandbox (simplified char table, prototype only) */
+const EN_K="qwertyuiop[]asdfghjkl;'zxcvbnm,./`",RU_K="йцукенгшщзхъфывапролджэячсмитьбю.ё";
+function conv(t){let ru=(t.match(/[а-яё]/gi)||[]).length,la=(t.match(/[a-z]/gi)||[]).length;const toRu=la>=ru;const a=toRu?EN_K:RU_K,b=toRu?RU_K:EN_K;
+  const out=[...t].map(ch=>{const lo=ch.toLowerCase(),i=a.indexOf(lo);if(i<0)return ch;const r=b[i];return ch===lo?r:r.toUpperCase()}).join('');
+  return{out:toRu?out.replace(/б(\s|$)/g,',$1').replace(/ж(\s|$)/g,'?$1'):out,dir:toRu?'EN → RU':'RU → EN'}}
+$('#try').oninput=e=>{const r=conv(e.target.value);$('#try-out').textContent=r.out;$('#languages .pill.info').textContent=r.dir};
+/* macro studio */
+const TPL={js:`// Макрос получает контекст и возвращает действие.
+// Доступно: ctx.text, ctx.clipboard (по разрешению)
+export default function run(ctx) {
+  const text = ctx.text.trim().replace(/\\s+/g, " ");
+  if (text.length === 0) {
+    return { action: "none" };
+  }
+  return { action: "replace", text: text };
+}
+`,py:`# Макрос получает контекст и возвращает действие.
+# Доступно: ctx.text, ctx.clipboard (по разрешению)
+def run(ctx):
+    text = " ".join(ctx.text.split())
+    if len(text) == 0:
+        return {"action": "none"}
+    return {"action": "replace", "text": text}
+`,text:`С уважением,
+Иван Петров`};
+const code={...TPL};let mtype='js',probs=[],dirty=false,posText='';
+const src=$('#src'),hl=$('#hl'),gut=$('#gut');
+const KW={js:'export|default|function|return|const|let|var|if|else|for|while|of|in|new|null|true|false|undefined|await|async',py:'def|return|if|elif|else|for|while|in|not|and|or|None|True|False|import|from|len|lambda'};
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function highlight(t){if(mtype==='text')return '';const cm=mtype==='js'?'\\/\\/[^\\n]*':'#[^\\n]*';
+  const re=new RegExp('('+cm+')|("(?:[^"\\\\\\n]|\\\\.)*"|\'(?:[^\'\\\\\\n]|\\\\.)*\')|\\b(\\d+(?:\\.\\d+)?)\\b|\\b('+KW[mtype]+')\\b|([A-Za-z_]\\w*)(?=\\()','g');
+  let o='',last=0,m;while((m=re.exec(t))){o+=esc(t.slice(last,m.index));const cls=m[1]?'c':m[2]?'s':m[3]?'n':m[4]?'k':'f';o+='<span class="'+cls+'">'+esc(m[0])+'</span>';last=re.lastIndex}
+  return o+esc(t.slice(last))+'\n'}
+function drawEd(){const t=src.value,n=t.split('\n').length,el=new Set(probs.map(p=>p.line));
+  gut.innerHTML=Array.from({length:n},(_,i)=>'<div'+(el.has(i+1)?' class="e"':'')+'>'+(i+1)+'</div>').join('');
+  let h=highlight(t);if(probs.length&&mtype!=='text'){const lines=h.split('\n');probs.forEach(p=>{if(lines[p.line-1]!==undefined)lines[p.line-1]='<span class="sq">'+lines[p.line-1]+'</span>'});h=lines.join('\n')}
+  hl.innerHTML=h;src.style.height='auto';src.style.height=Math.max(300,src.scrollHeight)+'px';hl.style.height=src.style.height;src.style.width='auto';
+  const w=Math.max(src.parentElement.clientWidth,src.scrollWidth);src.style.width=w+'px';hl.style.width=w+'px'}
+function caretPos(){const b=src.value.slice(0,src.selectionStart).split('\n');posText='Стр. '+b.length+', кол. '+(b[b.length-1].length+1)+' · '+({js:'JavaScript',py:'Python',text:'Текст'}[mtype])+(dirty?' · Не сохранено':'');if(!$('#macro').hidden)$('#sb-pos').textContent=posText}
+function setDirty(d){dirty=d;$('#dirty').hidden=!d;caretPos()}
+function loadType(){src.value=code[mtype];src.classList.toggle('plain',mtype==='text');src.setAttribute('aria-label',mtype==='text'?'Текст макроса':'Код макроса');src.style.whiteSpace=mtype==='text'?'pre-wrap':'pre';$('#perm-block').hidden=mtype==='text';$('#m-check').disabled=mtype==='text';probs=[];renderProbs(null);drawEd();caretPos()}
+seg($('#mtype'),v=>{code[mtype]=src.value;mtype=v;loadType()});
+seg($('#mctx'));
+src.addEventListener('input',()=>{code[mtype]=src.value;setDirty(true);drawEd()});
+src.addEventListener('keyup',caretPos);src.addEventListener('click',caretPos);
+src.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey&&!src.dataset.esc&&mtype!=='text'){e.preventDefault();const s=src.selectionStart;src.setRangeText('  ',s,src.selectionEnd,'end');src.dispatchEvent(new Event('input'))}src.dataset.esc=e.key==='Escape'?'1':''});
+function check(){const t=src.value,P=[],lines=t.split('\n');
+  const FORB=mtype==='js'?['fetch','XMLHttpRequest','require','WebSocket','eval']:['open','__import__','socket','subprocess','os.system'];
+  lines.forEach((l,i)=>{const code=l.replace(mtype==='js'?/\/\/.*$/:/#.*$/,'');FORB.forEach(f=>{const j=code.indexOf(f+(f.includes('.')?'':'('));if(j>=0&&(f!=='open'||!/\w/.test(code[j-1]||'')))P.push({line:i+1,col:j+1,code:'E_FORBIDDEN_API',msg:f+' недоступен в песочнице KeySwitch'})});
+    if(mtype==='py'&&/^\s*import\s+(os|socket|subprocess|urllib)/.test(code))P.push({line:i+1,col:1,code:'E_FORBIDDEN_API',msg:'модуль недоступен в песочнице KeySwitch'})});
+  const st=[],pairs={')':'(',']':'[','}':'{'};let line=1,col=0,inS=null,inC=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];col++;if(ch==='\n'){line++;col=0;inC=false;if(inS){inS=null}continue}if(inC)continue;
+    if(inS){if(ch==='\\'){i++;col++}else if(ch===inS)inS=null;continue}
+    if(ch==='"'||ch==="'"){inS=ch;continue}if((mtype==='js'&&ch==='/'&&t[i+1]==='/')||(mtype==='py'&&ch==='#')){inC=true;continue}
+    if(mtype==='js'&&ch==='/'&&/[(,=:\s]/.test(t[i-1]||'')){const m=t.slice(i).match(/^\/(?:[^\/\\\n]|\\.)+\/[gimsuy]*/);if(m){i+=m[0].length-1;col+=m[0].length-1;continue}}
+    if('([{'.includes(ch))st.push({ch,line,col});else if(pairs[ch]){const top=st.pop();if(!top||top.ch!==pairs[ch]){P.push({line,col,code:'E_SYNTAX',msg:'SyntaxError: неожиданный символ «'+ch+'»'});break}}}
+  if(!P.some(p=>p.code==='E_SYNTAX')&&st.length){const o=st[st.length-1],cl={'(':')','[':']','{':'}'}[o.ch];P.push({line:o.line,col:o.col,code:'E_SYNTAX',msg:'SyntaxError: ожидалась «'+cl+'» для «'+o.ch+'»'})}
+  return P.sort((a,b)=>a.line-b.line)}
+function renderProbs(ran){const c=$('#pcnt');c.textContent=probs.length;c.classList.toggle('e',probs.length>0);$('#m-alert').hidden=!probs.length;
+  const pl=$('#plist');if(ran===null){pl.className='muted out';pl.textContent=mtype==='text'?'Текстовому макросу проверка не нужна.':'Нажмите «Проверить», чтобы проверить код в песочнице.';return}
+  if(!probs.length){pl.className='muted out';pl.textContent='Ошибок нет.';return}
+  pl.className='';pl.innerHTML=probs.map((p,i)=>'<div class="prob"><span class="x" aria-label="Ошибка">✕</span><span class="num">Стр. '+p.line+', кол. '+p.col+'</span><span style="flex:1">'+esc(p.msg)+' <span class="mono muted">'+p.code+'</span></span><button class="btn btn-g btn-sm" data-goto="'+i+'">Перейти</button></div>').join('');
+  pl.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{const p=probs[+b.dataset.goto],ls=src.value.split('\n');let off=0;for(let i=0;i<p.line-1;i++)off+=ls[i].length+1;off+=p.col-1;src.focus();src.setSelectionRange(off,off);caretPos()})}
+function tab(which){const prob=which==='prob';$('#t-prob').setAttribute('aria-selected',prob);$('#t-out').setAttribute('aria-selected',!prob);$('#t-prob').tabIndex=prob?0:-1;$('#t-out').tabIndex=prob?-1:0;$('#tp-prob').hidden=!prob;$('#tp-out').hidden=prob}
+$('#t-prob').onclick=()=>tab('prob');$('#t-out').onclick=()=>tab('out');
+$('.tabs').onkeydown=e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const p=$('#t-prob').getAttribute('aria-selected')==='true';tab(p?'out':'prob');(p?$('#t-out'):$('#t-prob')).focus()}};
+function busy(btn,label,ms,fn){const sp=btn.querySelector('span'),old=sp.textContent;btn.disabled=true;btn.setAttribute('aria-busy','true');btn.style.minWidth=btn.offsetWidth+'px';sp.textContent=label;setTimeout(()=>{sp.textContent=old;btn.disabled=false;btn.removeAttribute('aria-busy');fn()},ms)}
+function doCheck(after){if(mtype==='text'){after&&after();return}busy($('#m-check'),'Проверка…',450,()=>{probs=check();renderProbs(true);drawEd();tab('prob');after&&after()})}
+$('#m-check').onclick=()=>doCheck();
+function doRun(){const go=()=>{if(probs.length){tab('prob');return}const inp=$('#tin').value;let out,act;if(mtype==='text'){out=src.value;act='insert'}else{out=inp.trim().split(/\s+/).filter(Boolean).join(' ');act=out?'replace':'none'}
+  const ms=8+Math.floor(Math.random()*9);$('#olist').textContent='▶ Тестовый запуск · '+({js:'JavaScript',py:'Python',text:'Текст'}[mtype])+'\nДействие: '+act+' · '+out.length+' симв. · '+ms+' мс\nРезультат: «'+out+'»\n\n(Прототип: код не исполняется, результат имитирован.)';tab('out')};
+  mtype==='text'?go():busy($('#m-run'),'Выполнение…',500,()=>{probs=check();renderProbs(true);drawEd();go()})}
+$('#m-run').onclick=doRun;
+$('#m-save').onclick=()=>setDirty(false);
+document.addEventListener('keydown',e=>{if($('#macro').hidden)return;if(e.ctrlKey&&e.code==='KeyS'){e.preventDefault();setDirty(false)}if(e.key==='F5'){e.preventDefault();doRun()}if(e.ctrlKey&&e.shiftKey&&e.code==='KeyB'){e.preventDefault();doCheck()}});
+window.addEventListener('resize',drawEd);
+/* settings */
+const ex=[{n:'keepass.exe',d:1},{n:'bitwarden.exe',d:1},{n:'windowsterminal.exe',d:1},{n:'cmd.exe',d:1},{n:'game.exe',d:0}];
+function renderEx(){$('#excl').innerHTML=ex.map((x,i)=>'<li><span class="mono">'+esc(x.n)+'</span><span class="pill'+(x.d?'':' info')+'">'+(x.d?'По умолчанию':'Добавлено вами')+'</span><button class="btn btn-g btn-sm" data-del="'+i+'" aria-label="Удалить '+esc(x.n)+'"><svg class="i"><use href="#i-x"/></svg></button></li>').join('');
+  $$('[data-del]').forEach(b=>b.onclick=()=>{ex.splice(+b.dataset.del,1);renderEx()})}
+renderEx();
+$('#ex-add').onclick=()=>{const v=$('#ex-in').value.trim().toLowerCase(),er=$('#ex-err'),inp=$('#ex-in');let m='';if(!/^[\w.-]+\.exe$/.test(v))m='Введите имя исполняемого файла, например app.exe';else if(ex.some(x=>x.n===v))m='Это приложение уже в списке';er.hidden=!m;er.textContent=m;er.id='ex-err';inp.setAttribute('aria-invalid',!!m);inp.setAttribute('aria-describedby','ex-err');if(!m){ex.push({n:v,d:0});inp.value='';renderEx()}};
+const auto=$('#auto');auto.addEventListener('change',()=>{const on=auto.getAttribute('aria-checked')==='true';if(on&&$('#autofail').getAttribute('aria-checked')==='true'){auto.setAttribute('aria-checked','false');$('#auto-err').hidden=false;return}$('#auto-err').hidden=true;const d=$('#d-auto');d.textContent=on?'Включён':'Выключен';d.className='pill'+(on?' ok':'')});
+/* diagnostics */
+const LOG=[['14:02:31','telegram.exe','Конвертация','Поле','SendInput','ok','—',38],['14:01:07','winword.exe','Конвертация','Выделение','Буфер','ok','—',92],['13:58:44','keepass.exe','Конвертация','—','—','warn','EXCLUDED_APP',2],['13:57:12','chrome.exe','Конвертация','Поле','—','warn','MIXED_CANCELLED',3410],['13:55:10','chrome.exe','Макрос (JS)','Выделение','—','err','E_TIMEOUT',2001],['13:52:03','notepad.exe','Конвертация','Фрагмент','SendInput','ok','—',21],['13:49:40','discord.exe','Конвертация','Поле','—','warn','LOW_CONFIDENCE',17],['13:47:18','excel.exe','Конвертация','—','—','warn','FOCUS_CHANGED',44],['13:40:02','mmc.exe','Конвертация','—','—','warn','ELEVATED_WINDOW',1],['13:38:55','whatsapp.exe','Макрос (Python)','Поле','Буфер','ok','—',143]];
+const RS={ok:['ok','Выполнено'],warn:['warn','Отклонено'],err:['err','Ошибка']};
+const WHY={EXCLUDED_APP:['Приложение в списке исключений.','Открыть исключения','settings'],MIXED_CANCELLED:['В окне выбора языка выбрана «Отмена» или истекло время. Ничего не изменено.'],E_TIMEOUT:['Макрос не завершился за 2 с и был остановлен. Текст не изменён.','Открыть Macro Studio','macro'],LOW_CONFIDENCE:['Не удалось уверенно определить вариант конвертации. Текст не изменён.'],FOCUS_CHANGED:['Фокус ушёл из поля до замены. Операция отменена.'],ELEVATED_WINDOW:['Окно запущено от имени администратора — KeySwitch не работает с ним.']};
+let df='all',log=[...LOG];
+function renderLog(){const q=$('#dq').value.trim().toLowerCase();const rows=log.filter(r=>(df==='all'||r[5]===df)&&r[1].includes(q));
+  $('#log').innerHTML=rows.map(r=>'<tr tabindex="0" data-i="'+log.indexOf(r)+'"><td class="num">'+r[0]+'</td><td class="mono">'+r[1]+'</td><td>'+r[2]+'</td><td class="hide-md">'+r[3]+'</td><td class="hide-md">'+r[4]+'</td><td><span class="pill '+RS[r[5]][0]+'">'+RS[r[5]][1]+'</span></td><td class="mono sec" style="font-size:12px">'+r[6]+'</td><td class="num" style="text-align:right">'+r[7]+'</td></tr>').join('');
+  $('#log-empty').hidden=rows.length>0;$('#log').closest('table').hidden=!rows.length;
+  $$('#log tr').forEach(tr=>{const sel=()=>{$$('#log tr').forEach(x=>x.removeAttribute('aria-selected'));tr.setAttribute('aria-selected','true');const r=log[+tr.dataset.i],w=WHY[r[6]];const d=$('#detail');d.hidden=false;d.innerHTML='<h3>'+r[0]+' · <span class="mono">'+r[1]+'</span> · '+r[2]+'</h3><div class="sec">'+(w?w[0]:'Операция выполнена.')+' '+(r[6]!=='—'?'<span class="mono">'+r[6]+'</span>':'')+'</div>'+(w&&w[1]?'<p style="margin:8px 0 0"><button class="link" data-go2="'+w[2]+'">'+w[1]+'</button></p>':'')+'<p class="help">Текст операции не хранится — показаны только метаданные.</p>';const g=d.querySelector('[data-go2]');if(g)g.onclick=()=>go(g.dataset.go2)};tr.onclick=sel;tr.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();sel()}if(e.key==='ArrowDown'&&tr.nextElementSibling){e.preventDefault();tr.nextElementSibling.focus()}if(e.key==='ArrowUp'&&tr.previousElementSibling){e.preventDefault();tr.previousElementSibling.focus()}}})}
+seg($('#dfilter'),v=>{df=v;renderLog()});$('#dq').oninput=renderLog;
+/* modal */
+let lastF=null;const modal=$('#modal');
+function openModal(){lastF=document.activeElement;modal.hidden=false;$('#m-cancel').focus()}
+function closeModal(){modal.hidden=true;lastF&&lastF.focus()}
+$('#clear-log').onclick=openModal;$('#m-cancel').onclick=closeModal;$('#m-ok').onclick=()=>{log=[];$('#detail').hidden=true;renderLog();closeModal()};
+modal.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if(e.key==='Tab'){const f=[$('#m-cancel'),$('#m-ok')],i=f.indexOf(document.activeElement);e.preventDefault();f[(i+1)%2].focus()}});
+/* language picker demo */
+const pd=$('#pdemo'),pk=$('#picker');let ptm=null,ppos='caret',pLast=null;
+function placePicker(){const f=$('#fake').getBoundingClientRect();if(ppos==='center'){pk.style.left=(f.width-320)/2+'px';pk.style.top=(f.height-pk.offsetHeight)/2+'px';return}
+  const c=$('#caret').getBoundingClientRect();let x=c.left-f.left-24,y=c.bottom-f.top+8;x=Math.max(8,Math.min(x,f.width-328));if(y+pk.offsetHeight>f.height-8)y=c.top-f.top-pk.offsetHeight-8;pk.style.left=x+'px';pk.style.top=y+'px'}
+function showPicker(){$('#fld-t').textContent='Привет, rfr ltkf?';pk.hidden=false;placePicker();const t=$('#ptimer');t.classList.remove('run');void t.offsetWidth;t.classList.add('run');clearTimeout(ptm);ptm=setTimeout(()=>pick('timeout'),10000);pk.querySelector('.opt').focus();$('#p-res').textContent='Клавиши 1 / 2 / Esc, стрелки + Enter или мышь. Через 10 с — автоматическая отмена.'}
+function pick(v){if(pk.hidden)return;clearTimeout(ptm);pk.hidden=true;const r={ru:['Привет, как дела?','Выбран русский: фрагменты EN-раскладки преобразованы, раскладка → RU.'],en:['Ghbdtn, rfr ltkf?','Выбран English: русские фрагменты преобразованы, раскладка → EN.'],cancel:[null,'Отмена: текст и буфер обмена не изменены. В журнал: MIXED_CANCELLED.'],timeout:[null,'Время истекло: автоматическая отмена, ничего не изменено.']}[v];if(r[0])$('#fld-t').textContent=r[0];$('#p-res').textContent=r[1];$('#p-again').focus()}
+function openDemo(){pLast=document.activeElement;pd.hidden=false;showPicker()}
+$('#open-picker').onclick=openDemo;$$('[data-picker]').forEach(b=>b.onclick=openDemo);
+$('#p-again').onclick=showPicker;$('#p-close').onclick=()=>{clearTimeout(ptm);pk.hidden=true;pd.hidden=true;pLast&&pLast.focus()};
+seg($('#ppos'),v=>{ppos=v;if(!pk.hidden)placePicker()});
+pk.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>pick(b.dataset.pick));
+pd.addEventListener('keydown',e=>{if(pk.hidden){if(e.key==='Escape')$('#p-close').click();return}
+  if(e.key==='1'){e.preventDefault();pick('ru')}else if(e.key==='2'){e.preventDefault();pick('en')}else if(e.key==='Escape'){e.preventDefault();pick('cancel')}
+  else if(e.key==='ArrowRight'||e.key==='ArrowLeft'){const o=[...pk.querySelectorAll('.opt')];const i=o.indexOf(document.activeElement);e.preventDefault();o[(i+1)%2].focus()}});
+pd.addEventListener('mousedown',e=>{if(!pk.hidden&&!pk.contains(e.target)&&$('#fake').contains(e.target))pick('cancel')});
+/* init */
+renderLog();loadType();setLang('ru');
+})();
+</script>
+</body>
+</html>
