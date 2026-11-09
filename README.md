@@ -1,1 +1,11 @@
-# KEYSWITCH-MASTER-PROJECT-INSTRUCTIONS
+# KeySwitch
+
+Фоновое приложение для Windows 10/11, исправляющее текст, набранный в неверной раскладке (EN ↔ RU), по горячей клавише. Вся обработка — локально.
+
+Статус: **этап анализа**, кода нет.
+
+- [Журнал решений](docs/00-decisions.md)
+- [PRD](docs/01-prd.md)
+- [Архитектура](docs/02-architecture.md)
+- [Модель угроз](docs/03-threat-model.md)
+- [План работ](docs/04-plan.md)
