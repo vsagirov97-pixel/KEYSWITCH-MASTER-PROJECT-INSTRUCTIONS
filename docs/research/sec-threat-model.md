@@ -449,7 +449,7 @@ flowchart LR
 - Связь: T-10 · SR-71.
 
 **ST-37 · CSP, удалённый контент, навигация · Low**
-- Описание: текущая CSP строгая [проверено: `tauri.conf.json:24`]: `default-src 'self'; script-src 'self'; style-src 'self'; … connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`, `freezePrototype: true`, `withGlobalTauri: false`. Tauri на этапе сборки добавляет хэши/nonce для локальных скриптов и стилей [док: tauri-docs `security/csp.mdx`, прочитан]. Риск в будущем: CodeMirror 6 вставляет `<style>` во время выполнения → соблазн добавить `'unsafe-inline'`; добавление внешних шрифтов/CDN; навигация WebView на внешний URL (ссылки в UI/документации).
+- Описание: текущая CSP строгая [проверено: `tauri.conf.json:25`]: `default-src 'self'; script-src 'self'; style-src 'self'; … connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`, `freezePrototype: true`, `withGlobalTauri: false`. Tauri на этапе сборки добавляет хэши/nonce для локальных скриптов и стилей [док: tauri-docs `security/csp.mdx`, прочитан]. Риск в будущем: CodeMirror 6 вставляет `<style>` во время выполнения → соблазн добавить `'unsafe-inline'`; добавление внешних шрифтов/CDN; навигация WebView на внешний URL (ссылки в UI/документации).
 - Сценарий: разработчик добавляет `'unsafe-inline'` в `style-src` для CodeMirror → CSS-инъекция/эксфильтрация через стили (ограничено `connect-src`/`img-src`).
 - Компоненты: `tauri.conf.json`, UI.
 - Рекомендация: CodeMirror — через `EditorView.cspNonce` (поддерживается CodeMirror 6 [UNVERIFIED версия]) или принять `'unsafe-inline'` только для `style-src`, никогда для `script-src`; запрет навигации: `on_navigation` в Rust пропускает только `tauri://`/`http://tauri.localhost`; внешние ссылки — не открывать (нет `shell`-плагина) или копировать в буфер.
@@ -529,7 +529,7 @@ flowchart LR
 **ST-46 · Пробелы в политике версий и `deny.toml` · Medium**
 - Описание: (а) `tauri = "2.12.4"`, `tauri-build = "2.7.3"` — caret-требования, lock уже разрешил `2.12.5`/`2.7.4` [проверено] — противоречит правилу CLAUDE.md №3 «точная версия»; (б) CI вызывает `cargo clippy/test/build` без `--locked` → lock может молча обновиться при изменении манифеста; (в) `deny.toml`: `unmaintained = "workspace"` — для транзитивных нет сигнала; нет `[bans] deny`-списка; нет `unsound`-явной политики (по умолчанию все — ok); `multiple-versions = "allow"`; (г) правило «не моложе 2 недель» конфликтует с security-патчами (ST-22, ST-39); (д) `cargo deny` не видит wasm-бинари, stdlib Python, данные моделей.
 - Сценарий: `cargo update` в feature-ветке подтягивает свежую скомпрометированную патч-версию транзитивного crate, ревью не замечает.
-- Компоненты: `Cargo.toml`, `app/src-tauri/Cargo.toml:15,19`, `deny.toml`, `.github/workflows/ci.yml`.
+- Компоненты: `Cargo.toml`, `app/src-tauri/Cargo.toml:14,18`, `deny.toml`, `.github/workflows/ci.yml`.
 - Рекомендация: `=x.y.z` для прямых зависимостей; `--locked` во всех cargo-командах CI; `[bans] deny` (ST-45, ST-29); отчёт `unmaintained = "all"` как warning-джоб; исключение из «правила 2 недель» для security-релизов с записью в PR; инвентарь не-crate артефактов (SBOM: wasm, stdlib, данные) с хэшами.
 - Проверка: CI — `cargo metadata --locked`; grep `Cargo.toml` на `= "[0-9]` без `=`.
 - Связь: T-14 · SR-60, SR-61, SR-62.
@@ -537,7 +537,7 @@ flowchart LR
 **ST-47 · Фронтенд-цепочка поставок · Medium**
 - Описание: 96 dev-пакетов (Vite 8, Rolldown/нативные бинарии, Tailwind 4, TypeScript) **исполняются при сборке** и формируют бандл, который получает IPC-доступ (ST-36). В job `windows` `npm ci` запускается **без** `--ignore-scripts` (в job `frontend` — с флагом) [проверено: `ci.yml`]. Будущие CodeMirror-пакеты, i18n и UI-библиотеки увеличат поверхность.
 - Сценарий: скомпрометированная патч-версия dev-зависимости внедряет код в `dist/` → в WebView → `invoke` опасных команд.
-- Компоненты: `app/package.json`, `app/package-lock.json`, `ci.yml:56`.
+- Компоненты: `app/package.json`, `app/package-lock.json`, `ci.yml:60`.
 - Рекомендация: `npm ci --ignore-scripts` везде; точные версии (уже так); `npm audit signatures` в CI; минимум runtime-пакетов; проверка, что бандл не содержит внешних URL (grep `https?://` в `dist/` с allowlist); узкие IPC-команды + нативное подтверждение (ST-36) ограничивают ущерб.
 - Проверка: CI-джоб; grep `dist/`.
 - Связь: T-14 · SR-64.
