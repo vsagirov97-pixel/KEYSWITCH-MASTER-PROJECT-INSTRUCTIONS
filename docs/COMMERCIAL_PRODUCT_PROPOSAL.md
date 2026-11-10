@@ -6,9 +6,9 @@
 
 | Шаг | Что | Кто | Документ | Статус |
 |-----|-----|-----|----------|--------|
-| C-1 | Обзор рынка, конкуренты, потребности B2C, Premium-кандидаты, модели монетизации | AGENT 10 Market Analyst | `docs/commercial/MARKET_OVERVIEW.md`, `COMPETITOR_ANALYSIS.md`, `B2C_USER_NEEDS.md`, `PREMIUM_FEATURE_RESEARCH.md`, `MONETIZATION_STRATEGY.md` | In Progress |
-| C-2 | Требования B2B, Business- и Enterprise-кандидаты | AGENT 17 B2B Researcher | `docs/commercial/B2B_REQUIREMENTS.md`, `BUSINESS_FEATURE_RESEARCH.md`, `ENTERPRISE_FEATURE_RESEARCH.md` | In Progress |
-| C-3 | Оценка требований и пользы, черновая раскладка по уровням | AGENT 02 Product Analyst | раздел 3 ниже | Backlog |
+| C-1 | Обзор рынка, конкуренты, потребности B2C, Premium-кандидаты, модели монетизации | AGENT 10 Market Analyst | `docs/commercial/MARKET_OVERVIEW.md`, `COMPETITOR_ANALYSIS.md`, `B2C_USER_NEEDS.md`, `PREMIUM_FEATURE_RESEARCH.md`, `MONETIZATION_STRATEGY.md` | Done (на проверке) |
+| C-2 | Требования B2B, Business- и Enterprise-кандидаты | AGENT 17 B2B Researcher | `docs/commercial/B2B_REQUIREMENTS.md`, `BUSINESS_FEATURE_RESEARCH.md`, `ENTERPRISE_FEATURE_RESEARCH.md` | Done (на проверке) |
+| C-3 | Оценка требований и пользы, черновая раскладка по уровням | AGENT 02 Product Analyst | `docs/commercial/PA_EVALUATION.md` | In Progress |
 | C-4 | Техническая оценка (сложность, поддержка, производительность, совместимость с офлайн-моделью) | AGENT 03 System Architect | раздел 4 | Backlog |
 | C-5 | UX: как уровни видны в интерфейсе без навязчивости | AGENT 04 UI/UX Designer | раздел 4 | Backlog |
 | C-6 | Security Review (лицензирование/активация, синхронизация, корпоративные политики) | CISO | раздел 5 | Backlog |
