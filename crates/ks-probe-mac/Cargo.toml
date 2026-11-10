@@ -1,0 +1,55 @@
+[package]
+name = "ks-probe-mac"
+description = "Spike M-2a: macOS integration probe (AX, CGEvent typing, NSPasteboard, TIS, RegisterEventHotKey). Not a product crate."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# Workspace lints forbid `unsafe`; this spike needs FFI to Apple frameworks, so the lints
+# are restated here with `unsafe_code` relaxed and every unsafe block documented (SEC-L2).
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+undocumented_unsafe_blocks = "deny"
+
+# On non-macOS targets the library is empty and the binary/test are no-ops.
+# All crates below are already in Cargo.lock via Tauri except objc2-application-services
+# (same objc2 family, same release 0.3.2 of 2025-10-04, Zlib OR Apache-2.0 OR MIT).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.5"
+objc2-foundation = { version = "=0.3.2", default-features = false, features = [
+  "std", "NSString", "NSData", "NSArray", "NSEnumerator", "NSGeometry", "NSObject", "NSRange", "NSValue",
+] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = [
+  "std", "NSApplication", "NSResponder", "NSView", "NSWindow", "NSControl", "NSTextField",
+  "NSSecureTextField", "NSText", "NSTextView", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem",
+  "NSGraphics", "NSRunningApplication",
+] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = [
+  "std", "CFString", "CFArray", "CFBase", "CFDictionary", "CFNumber", "CFCGTypes",
+] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = [
+  "std", "libc", "CGEvent", "CGEventTypes", "CGEventSource", "CGRemoteOperation",
+] }
+objc2-application-services = { version = "=0.3.2", default-features = false, features = [
+  "std", "libc", "HIServices", "AXUIElement", "AXError", "AXValue", "AXValueConstants",
+] }
+
+[[bin]]
+name = "ks-mac-fixture"
+path = "src/bin/ks-mac-fixture.rs"
+test = false
+bench = false
+
+# Custom harness: AppKit and TIS need the process main thread; libtest runs tests on
+# worker threads, so the probe is a plain `main` that prints one JSON line per scenario.
+[[test]]
+name = "probe"
+path = "tests/probe.rs"
+harness = false
