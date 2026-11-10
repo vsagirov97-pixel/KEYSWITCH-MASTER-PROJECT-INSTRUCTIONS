@@ -36,6 +36,21 @@ fn fail(r: &Report, e: &str) {
     common::finish(r, Status::Fail, e);
 }
 
+/// `Some(reason)` if the clipboard cannot be used here. A sequence number of 0 alone is not
+/// a reason: a fresh session that never wrote to the clipboard also reports 0 (observed on
+/// windows-latest, run 42828963511). So we write once and check the number afterwards.
+fn unusable(r: &mut Report, owner: Hwnd) -> Option<&'static str> {
+    r.field("seq_initial", clipboard::seq());
+    if clipboard::open(owner).is_err() {
+        return Some("OpenClipboard failed for 1 s");
+    }
+    match put(owner, TEMP, false) {
+        Err(_) => Some("probe write to the clipboard failed"),
+        Ok(0) => Some("sequence number still 0 after a write (no WINSTA_ACCESSCLIPBOARD)"),
+        Ok(_) => None,
+    }
+}
+
 /// d1: our temporary item carries the three privacy formats; enumeration reads no data
 /// and does not change the sequence number; writing does.
 #[test]
@@ -43,15 +58,11 @@ fn d1_privacy_formats_and_enumeration() {
     let id = "d1.clipboard.privacy_formats";
     let Some(env) = common::start(id) else { return };
     let mut r = common::report(id, &env);
-    if clipboard::seq() == 0 {
-        return common::finish(
-            &r,
-            Status::Skip,
-            "GetClipboardSequenceNumber = 0 (no clipboard access)",
-        );
-    }
     let fx = common::fixture(&r);
     let owner = fx.controls.main;
+    if let Some(why) = unusable(&mut r, owner) {
+        return common::finish(&r, Status::Skip, why);
+    }
     let seq0 = clipboard::seq();
     let seq1 = match put(owner, TEMP, true) {
         Ok(s) => s,
@@ -94,15 +105,11 @@ fn d2_restore_only_if_unchanged() {
     let id = "d2.clipboard.restore_guard";
     let Some(env) = common::start(id) else { return };
     let mut r = common::report(id, &env);
-    if clipboard::seq() == 0 {
-        return common::finish(
-            &r,
-            Status::Skip,
-            "GetClipboardSequenceNumber = 0 (no clipboard access)",
-        );
-    }
     let fx = common::fixture(&r);
     let owner = fx.controls.main;
+    if let Some(why) = unusable(&mut r, owner) {
+        return common::finish(&r, Status::Skip, why);
+    }
     let mut problems: Vec<&'static str> = Vec::new();
 
     // Positive control: nobody interferes → restored.
