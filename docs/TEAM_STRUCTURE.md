@@ -21,6 +21,8 @@ graph TD
   ENG --> A13[AGENT 13 Runtime & Sandbox Engineer]
   DES --> A06[AGENT 06 Frontend Dev]
   SEC --> A07[AGENT 07 Security Analyst]
+  SEC --> A14[AGENT 14 Runtime/WASM Security]
+  SEC --> A15[AGENT 15 Windows Security]
 ```
 
 CISO и CLO подчиняются Project Director только организационно: их экспертные заключения независимы, отрицательное заключение не может быть отменено Project Director (эскалация — к владельцу).
@@ -41,6 +43,8 @@ CISO и CLO подчиняются Project Director только организ�
 | AGENT 10 | Market & Competitive Intelligence Analyst | `market-analyst.md` | **Senior** | Product & Market Team; постоянный, на весь срок жизни продукта (D-16) | исследование ~20 конкурентов, 18 болей, 22 идеи; честно отметил непроверенное | — |
 | AGENT 11 | **CISO** — Director of Information Security & Product Security | `ciso.md` | Director | независимый директор | назначен директивой V3 | **да**: PR, функции, релиз при открытых Critical/High |
 | AGENT 12 | **CLO** — Legal Director & Head of EU Regulatory Compliance | `clo.md` | Director | независимый директор | назначен директивой V3 | **да**: юридически неподготовленный выпуск, несовместимые лицензии |
+| AGENT 14 | Runtime & WebAssembly Security Specialist (новый) | `runtime-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-3 | через CISO |
+| AGENT 15 | Windows Platform Security Specialist (новый) | `windows-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-2 | через CISO |
 | AGENT 13 | Runtime & Sandbox Engineer (новый) | `runtime-sandbox-dev.md` | Middle | Engineering Team; security-ревью — CISO | закрывает пробел компетенций WebAssembly/WASI/CPython/QuickJS/AppContainer для S-3 | — |
 
 Приостановленных ролей нет. Слияний ролей нет: Product Analyst и Market Analyst разделены (решение владельца).
@@ -52,7 +56,7 @@ CISO и CLO подчиняются Project Director только организ�
 | Product & Market | AGENT 02 (Lead) | 02, 10 | рынок, идеи, требования, MVP, критерии приёмки, матрица приложений | Project Director → GATE 3 |
 | Engineering | AGENT 03 (Lead) | 03, 05, 13 | архитектура, ядро, Windows-интеграция, песочница, качество кода | Project Director → GATE 4, 6, 7, 8 |
 | Design & Frontend | AGENT 04 (Lead) | 04, 06 | дизайн-система, прототипы, UI, i18n, доступность | Project Director → GATE 5 |
-| Security | AGENT 11 CISO | 07 (+ специалисты по запросу CISO) | безопасность всего продукта | GATE 10, security review задач |
+| Security | AGENT 11 CISO | 07, 14, 15 (+ специалисты по запросу CISO) | безопасность всего продукта | GATE 10, security review задач |
 | Legal & Compliance | AGENT 12 CLO | специалисты по запросу CLO | право ЕС и национальное, лицензии, IP, распространение | GATE 11, legal review задач |
 | QA (индивидуально) | AGENT 08 → Project Director | 08 | независимое функциональное тестирование | GATE 9 |
 | Build & Release (индивидуально) | AGENT 09 → Project Director | 09 | CI/CD, сборка, установщик | GATE 12 |
@@ -69,3 +73,4 @@ QA и Release пока не образуют отдельных команд (п
 |------|-----------|
 | 2026-11-10 | AGENT 10 Market Analyst добавлен (решение владельца, D-16). |
 | 2026-11-10 | Директива V3: назначены AGENT 11 CISO и AGENT 12 CLO; AGENT 07 переподчинён CISO; созданы команды Product & Market, Engineering, Design & Frontend, Security, Legal; повышены 02, 03, 04 до Lead, 07 и 10 — Senior; добавлен AGENT 13 Runtime & Sandbox Engineer; AGENT 05 сфокусирован на Windows-интеграции. |
+| 2026-11-10 | По запросу CISO добавлены AGENT 14 Runtime & WebAssembly Security и AGENT 15 Windows Platform Security (ревьюеры S-3 и S-2, только чтение). |
