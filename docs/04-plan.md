@@ -1,3 +1,5 @@
+> **УСТАРЕЛО (2026-11-10).** Действующий источник истины: `docs/ROADMAP.md`, `docs/BACKLOG.md`, `docs/DEVELOPMENT_WORKFLOW.md`. Документ сохранён для истории.
+
 # KeySwitch — План работ
 
 Процесс: ANALYZE → PLAN → DESIGN → DEVELOP → REVIEW → TEST → SECURITY AUDIT → RELEASE.

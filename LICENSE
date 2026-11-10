@@ -1,0 +1,12 @@
+Copyright (c) 2026 the KeySwitch project owner. All rights reserved.
+
+This software and its source code are proprietary. No license is granted to
+use, copy, modify, merge, publish, distribute, sublicense or sell copies of
+this software, in whole or in part, without the prior written permission of
+the copyright holder. Public visibility of this repository does not grant
+any license.
+
+Third-party components included in or distributed with this software are
+licensed under their own terms; see THIRD_PARTY.md and docs/SOFTWARE_LICENSE_REGISTER.md.
+Language-model data in crates/ks-core/data/ is licensed under CC-BY-SA-4.0;
+see crates/ks-core/data/README.md.
