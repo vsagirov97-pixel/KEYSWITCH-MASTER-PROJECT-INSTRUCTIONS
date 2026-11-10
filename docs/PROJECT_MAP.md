@@ -21,6 +21,11 @@
 | QA | Тесты ядра; корпус ≥ 500 фраз; чек-лист ручной приёмки | 🧪 / ⬜ | `crates/ks-core/tests` | AGENT 08 |
 | Сборка | CI: core (Linux), frontend, Windows build + NSIS (unsigned), supply chain | ✅ зелёный на `main` | `.github/workflows/ci.yml`, `deny.toml` | AGENT 09 |
 | Коммерция | Рынок B2C/B2B, Premium/Business/Enterprise, монетизация, предложение владельцу | 📄 (исследование в работе; ничего не утверждено) | `docs/commercial/`, `docs/COMMERCIAL_PRODUCT_PROPOSAL.md` | AGENT 10, 17 → PD |
+| macOS | Карта платформы, CI-план, матрица macOS | 📄 (в работе, M-1) | `docs/MACOS_PLATFORM_MAP.md`, `docs/COMPATIBILITY_MATRIX_MACOS.md` | AGENT 19 |
+| Windows | Карта платформы, матрица Windows | 📄 | `docs/WINDOWS_PLATFORM_MAP.md`, `docs/COMPATIBILITY_MATRIX_WINDOWS.md` | AGENT 20 |
+| Обновления | Архитектура, политика экстренных патчей, ключи, чек-лист, восстановление | 📄 (в работе) | `docs/UPDATE_*.md`, `docs/EMERGENCY_PATCH_POLICY.md`, `docs/SIGNING_KEY_MANAGEMENT.md` | AGENT 03, CISO |
+| Решения | ADR-реестр | 📄 (в работе) | `docs/adr/` | AGENT 03 |
+| Компоненты | SBOM | 📄 человекочитаемый | `docs/SBOM.md` (`scripts/sbom.sh`) | AGENT 09 |
 | Управление | Структура команды, workflow, roadmap, backlog, статус, риски | 📄 | `docs/*.md` (этот набор) | AGENT 01 |
 
 ## 2. Репозиторий
@@ -34,7 +39,7 @@
 
 | Тема | Источник истины | Устарело / заменено |
 |------|-----------------|---------------------|
-| Директива | `docs/master-instructions-v4.md` (+ V3 и V1 для истории и деталей) | — |
+| Директива | `docs/master-instructions-v7.md` (+ V4, V3, V1 для истории и деталей) | — |
 | Коммерция | `docs/COMMERCIAL_PRODUCT_PROPOSAL.md` + `docs/commercial/` | `docs/market/` (первичное исследование) |
 | Решения | `docs/00-decisions.md` | — |
 | Команда | `docs/TEAM_STRUCTURE.md` | `docs/team.md` (ссылка) |
@@ -44,4 +49,4 @@
 | План | `docs/ROADMAP.md`, `docs/BACKLOG.md`, `docs/DEVELOPMENT_WORKFLOW.md` | `docs/04-plan.md`, `docs/research/synthesis.md` §4–6 |
 | Статус | `docs/PROJECT_STATUS.md` | — |
 | Риски | `docs/RISK_REGISTER.md` | разделы рисков в research-документах |
-| Право | `docs/LEGAL_COMPLIANCE_REGISTER.md`, `docs/LICENSE_REGISTER.md` | `THIRD_PARTY.md` (будет сгенерирован из реестра) |
+| Право | `docs/LEGAL_COMPLIANCE_REGISTER.md`, `docs/SOFTWARE_LICENSE_REGISTER.md`, проекты `*_DRAFT.md` | `THIRD_PARTY.md` (будет сгенерирован из реестра) |
