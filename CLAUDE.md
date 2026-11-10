@@ -4,10 +4,13 @@
 
 **Главный принцип: качество, безопасность и сохранность данных важнее скорости.**
 
-## Документы (источник истины)
-- `docs/team.md` — реестр команды (ID ролей уникальны).
-- `docs/00-decisions.md` — принятые решения D-xx. Не нарушать; изменение — только с подтверждения владельца.
-- `docs/01-prd.md` — требования и тест-кейсы. `docs/02-architecture.md` — модули и трейты. `docs/03-threat-model.md` — угрозы T-xx. `docs/04-plan.md` — этапы, спайки, Quality Gates.
+## Документы (источник истины — `docs/PROJECT_MAP.md` §3)
+- Директива: `docs/master-instructions-v3.md` (+ продуктовые требования `docs/master-instructions.md`).
+- `docs/00-decisions.md` — принятые решения D-xx. Не нарушать.
+- `docs/TEAM_STRUCTURE.md` — команда, уровни, руководители. `docs/DEVELOPMENT_WORKFLOW.md` — статусы задач, ревью, 12 gates.
+- `docs/SYSTEM_ARCHITECTURE.md` — архитектура. `docs/SECURITY_REVIEW.md` — реестр CISO. `docs/LEGAL_COMPLIANCE_REGISTER.md`, `docs/LICENSE_REGISTER.md` — реестры CLO.
+- `docs/BACKLOG.md`, `docs/ROADMAP.md`, `docs/PROJECT_STATUS.md`, `docs/RISK_REGISTER.md`.
+- Требования: `docs/research/pa-prd.md` (до GATE 3). Документы `01`–`04` устарели.
 
 ## Структура
 - `crates/ks-core` — ядро конвертации. **Без I/O, без ОС-зависимостей, без `unsafe`.**
@@ -35,8 +38,9 @@
 - С владельцем — по-русски, кратко, с явными решениями, которые нужны от него.
 - Код, идентификаторы, комментарии в коде, сообщения коммитов — по-английски.
 
-## Команда (реестр — `docs/team.md`, субагенты в `.claude/agents`)
-AGENT 01 Orchestrator (основная сессия) · 02 product-analyst · 03 system-architect · 04 ui-ux-designer · 05 rust-windows-dev · 06 frontend-dev · 07 security-analyst (независим, только чтение) · 08 qa-engineer · 09 release-engineer · 10 market-analyst (постоянный, на весь срок жизни продукта). Orchestrator распределяет задачи, ≤ 4 активных потока.
+## Команда (реестр — `docs/TEAM_STRUCTURE.md`, субагенты в `.claude/agents`)
+AGENT 01 Project Director (основная сессия) · 02 product-analyst (Lead, Product & Market) · 03 system-architect (Lead, Engineering) · 04 ui-ux-designer (Lead, Design & Frontend) · 05 rust-windows-dev (Windows Integration) · 06 frontend-dev · 07 security-analyst (Senior, под CISO, только чтение) · 08 qa-engineer · 09 release-engineer · 10 market-analyst (Senior, постоянный) · **11 ciso** и **12 clo** — независимые директора с правом блокировки · 13 runtime-sandbox-dev. ≤ 4 активных потока.
+- Security Review (CISO) и Legal Review (CLO) — по триггерам `DEVELOPMENT_WORKFLOW.md` §1; их отрицательное заключение Project Director отменить не может.
 - **market-analyst обязателен**: при старте, перед проектированием UI, перед каждой новой функцией, на каждом крупном этапе (новые идеи), перед коммерческим запуском и крупными обновлениями (позиционирование, монетизация). Не пропускать при планировании; его идеи оценивают product-analyst, ui-ux-designer, system-architect, security-analyst; решение — Orchestrator с владельцем.
 
 ## Навыки (`.claude/skills`)

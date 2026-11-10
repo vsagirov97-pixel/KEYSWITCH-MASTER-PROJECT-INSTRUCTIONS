@@ -1,3 +1,5 @@
+> **УСТАРЕЛО (2026-11-10).** Действующий источник истины: `docs/research/pa-prd.md` (до консолидации в GATE 3). Документ сохранён для истории.
+
 # KeySwitch — Product Requirements Document (v1)
 
 Статус: **черновик для GATE 1** · Автор: Product Analyst · Решения: см. `00-decisions.md`
