@@ -4,7 +4,7 @@
 
 | # | Этап | Основные задачи (BACKLOG) | Команда / руководитель | Выход | Состояние |
 |---|------|---------------------------|------------------------|-------|-----------|
-| 0 | Принятие проекта | BL-GOV-01…03 | Project Director | GATE 1 Audit, GATE 2 Team | **в работе** (этот пакет) |
+| 0 | Принятие проекта | BL-GOV-01…03 | Project Director | GATE 1 Audit, GATE 2 Team | **закрыт** 2026-11-10 |
 | 1 | Product Research | BL-PRD-01…03, BL-MKT-01…02 | Product & Market / AGENT 02 | GATE 3 Requirements | исследования готовы, консолидация впереди |
 | 2 | Architecture & Governance | BL-ARCH-01, BL-SEC-01, BL-LEG-01…03, **спайки S-2, S-3** | Engineering / AGENT 03, CISO, CLO | GATE 4 Architecture | архитектура v2.1 записана; спайки не начаты |
 | 3 | Design | BL-DES-01…02 | Design & Frontend / AGENT 04 | GATE 5 Design | прототип ждёт отзыва владельца |
@@ -20,7 +20,7 @@
 C-1/C-2 исследование (MKT, AGENT 17) → C-3…C-7 оценка всеми профильными специалистами → C-8 единое предложение → **решение владельца** (LEVEL 3). Платные функции не реализуются до решения. См. `COMMERCIAL_PRODUCT_PROPOSAL.md`.
 
 ## Ближайшие шаги (порядок)
-1. Завершить пакет принятия проекта: SECURITY_REVIEW (CISO), LEGAL_COMPLIANCE_REGISTER и LICENSE_REGISTER (CLO) → отчёт владельцу (GATE 1–2).
+1. ✅ Пакет принятия проекта завершён (GATE 1–2). Коммерческое исследование C-1/C-2 — в работе.
 2. Параллельно (3 кодовых потока + дизайн):
    - S-2 Windows integration probe (AGENT 05, ревью CISO);
    - S-3 Sandbox (AGENT 13, ревью CISO, лицензии CPython/QuickJS — CLO);
