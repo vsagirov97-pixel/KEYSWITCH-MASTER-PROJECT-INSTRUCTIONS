@@ -1,0 +1,29 @@
+[package]
+name = "ks-sandbox"
+description = "KeySwitch macro sandbox: Wasmtime host with hard limits (spike S-3a)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "ks-sandbox"
+path = "src/bin/ks-sandbox.rs"
+
+[dependencies]
+ks-sandbox-proto = { path = "../ks-sandbox-proto" }
+# Wasmtime LTS line 48, security patch 48.0.8 (published 2026-10-29; fixes RUSTSEC-2026-0422/0423/0424).
+# It is younger than 2 weeks: admitted under CISO procedure Q-3 (docs/SECURITY_REVIEW.md §4.2,
+# "first application: wasmtime =48.0.8"; SEC-01, SEC-21; owner decision D-22).
+# default-features = false; enabled features only:
+#   runtime   - Store/Instance/Linker execution (needed to run anything);
+#   std       - host OS support: virtual memory, signal-based traps, std threads (epoch ticker);
+#   cranelift - Wasm -> native compiler (Cranelift is Tier 1; Pulley matrix is S-3c).
+# Deliberately NOT enabled (SEC-01, SR-41): cache, component-model(-async), gc*, threads,
+# pooling-allocator, async, wat, parallel-compilation, profiling, coredump, debug*, addr2line,
+# backtrace, demangle, winch, stack-switching, wit-parser, compile-time-builtins.
+wasmtime = { version = "=48.0.8", default-features = false, features = ["runtime", "std", "cranelift"] }

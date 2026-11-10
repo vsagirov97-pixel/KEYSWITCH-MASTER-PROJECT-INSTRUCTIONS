@@ -1,0 +1,17 @@
+[package]
+name = "ks-sandbox-proto"
+description = "KeySwitch macro sandbox host<->guest wire protocol with hard limits"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Both are already in the workspace graph (via Tauri) at these exact versions; both >= 2 weeks old
+# (serde 1.0.229: 2026-07-18, serde_json 1.0.154: 2026-10-11). See docs/spikes/S-3a-sandbox-host.md.
+serde = { version = "=1.0.229", default-features = false, features = ["std", "derive"] }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
