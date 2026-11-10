@@ -46,5 +46,7 @@ static SERIAL: Mutex<()> = Mutex::new(());
 
 /// Serialises tests that touch shared desktop state (foreground, focus, clipboard, layouts).
 pub fn serial() -> MutexGuard<'static, ()> {
-    SERIAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }

@@ -15,9 +15,9 @@ use windows::Win32::System::Ole::{
     SafeArrayDestroy, SafeArrayGetElement, SafeArrayGetLBound, SafeArrayGetUBound,
 };
 use windows::Win32::UI::Accessibility::{
-    CUIAutomation8, IUIAutomation, IUIAutomation2, IUIAutomationElement,
-    IUIAutomationTextPattern, IUIAutomationTextRange, TextPatternRangeEndpoint_End,
-    TextPatternRangeEndpoint_Start, TextUnit_Character, UIA_TextPatternId,
+    CUIAutomation8, IUIAutomation, IUIAutomation2, IUIAutomationElement, IUIAutomationTextPattern,
+    IUIAutomationTextRange, TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start,
+    TextUnit_Character, UIA_TextPatternId,
 };
 use windows::core::Interface;
 
@@ -95,7 +95,8 @@ impl Uia {
     /// System-wide focused element.
     pub fn focused(&self) -> Result<IUIAutomationElement, String> {
         // SAFETY: method call on a live interface.
-        unsafe { self.automation.GetFocusedElement() }.map_err(|e| format!("GetFocusedElement: {e}"))
+        unsafe { self.automation.GetFocusedElement() }
+            .map_err(|e| format!("GetFocusedElement: {e}"))
     }
 
     /// Element for a window handle.
@@ -146,10 +147,15 @@ pub fn facts(el: &IUIAutomationElement) -> Facts {
             control_type: el.CurrentControlType().map(|c| c.0).unwrap_or(0),
             is_password: el.CurrentIsPassword().map(|b| b.as_bool()).unwrap_or(true),
             hwnd: el.CurrentNativeWindowHandle().ok().map(Hwnd::from_raw),
-            class_name: el.CurrentClassName().map(|b| b.to_string()).unwrap_or_default(),
+            class_name: el
+                .CurrentClassName()
+                .map(|b| b.to_string())
+                .unwrap_or_default(),
             pid: el.CurrentProcessId().unwrap_or(0),
             runtime_id: runtime_id(el).unwrap_or_default(),
-            has_text_pattern: el.GetCurrentPattern(UIA_TextPatternId).is_ok_and(|p| !p.as_raw().is_null()),
+            has_text_pattern: el
+                .GetCurrentPattern(UIA_TextPatternId)
+                .is_ok_and(|p| !p.as_raw().is_null()),
         }
     }
 }
@@ -159,7 +165,9 @@ pub fn runtime_id(el: &IUIAutomationElement) -> Result<Vec<i32>, String> {
     // SAFETY: GetRuntimeId returns a caller-owned 1-D SAFEARRAY of VT_I4 (or NULL). We read
     // it element by element into a local i32 and destroy it exactly once.
     unsafe {
-        let sa = el.GetRuntimeId().map_err(|e| format!("GetRuntimeId: {e}"))?;
+        let sa = el
+            .GetRuntimeId()
+            .map_err(|e| format!("GetRuntimeId: {e}"))?;
         if sa.is_null() {
             return Ok(Vec::new());
         }
@@ -198,7 +206,9 @@ pub fn range_text(r: &IUIAutomationTextRange, max: i32) -> Result<String, String
 pub fn selection(tp: &IUIAutomationTextPattern) -> Result<Vec<IUIAutomationTextRange>, String> {
     // SAFETY: method calls on live interfaces; returned ranges are owned.
     unsafe {
-        let arr = tp.GetSelection().map_err(|e| format!("GetSelection: {e}"))?;
+        let arr = tp
+            .GetSelection()
+            .map_err(|e| format!("GetSelection: {e}"))?;
         let n = arr.Length().map_err(|e| format!("Length: {e}"))?;
         (0..n)
             .map(|i| arr.GetElement(i).map_err(|e| format!("GetElement: {e}")))
@@ -213,10 +223,16 @@ pub fn prefix_range(
 ) -> Result<IUIAutomationTextRange, String> {
     // SAFETY: method calls on live interfaces; `r` is a fresh clone we own.
     unsafe {
-        let doc = tp.DocumentRange().map_err(|e| format!("DocumentRange: {e}"))?;
+        let doc = tp
+            .DocumentRange()
+            .map_err(|e| format!("DocumentRange: {e}"))?;
         let r = doc.Clone().map_err(|e| format!("Clone: {e}"))?;
-        r.MoveEndpointByRange(TextPatternRangeEndpoint_End, &r, TextPatternRangeEndpoint_Start)
-            .map_err(|e| format!("MoveEndpointByRange: {e}"))?;
+        r.MoveEndpointByRange(
+            TextPatternRangeEndpoint_End,
+            &r,
+            TextPatternRangeEndpoint_Start,
+        )
+        .map_err(|e| format!("MoveEndpointByRange: {e}"))?;
         r.MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, chars)
             .map_err(|e| format!("MoveEndpointByUnit: {e}"))?;
         Ok(r)

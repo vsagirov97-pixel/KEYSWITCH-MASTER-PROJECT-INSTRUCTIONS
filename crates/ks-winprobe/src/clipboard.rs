@@ -9,7 +9,9 @@ use windows::Win32::System::DataExchange::{
     GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard,
     RegisterClipboardFormatW, SetClipboardData,
 };
-use windows::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock};
+use windows::Win32::System::Memory::{
+    GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
 use windows::Win32::System::Ole::CF_UNICODETEXT;
 use windows::core::w;
 
@@ -83,7 +85,8 @@ fn set_bytes(format: u32, bytes: &[u8]) -> Result<(), String> {
     // while locked, unlock, and hand it to SetClipboardData. On success the system owns the
     // block; on failure we free it ourselves.
     unsafe {
-        let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1)).map_err(|e| format!("GlobalAlloc: {e}"))?;
+        let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len().max(1))
+            .map_err(|e| format!("GlobalAlloc: {e}"))?;
         let p = GlobalLock(h) as *mut u8;
         if p.is_null() {
             let _ = GlobalFree(Some(h));

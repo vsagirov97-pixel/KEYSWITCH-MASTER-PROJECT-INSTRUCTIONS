@@ -100,8 +100,7 @@ pub fn contains_return(batches: &[Vec<INPUT>]) -> bool {
         // SAFETY: every INPUT built by this module is INPUT_KEYBOARD, so `ki` is the
         // initialised union member; other types are skipped.
         let ki = unsafe { i.Anonymous.ki };
-        i.r#type == INPUT_KEYBOARD
-            && (ki.wVk == VK_RETURN || ki.wScan == 0x0D || ki.wScan == 0x0A)
+        i.r#type == INPUT_KEYBOARD && (ki.wVk == VK_RETURN || ki.wScan == 0x0D || ki.wScan == 0x0A)
     })
 }
 

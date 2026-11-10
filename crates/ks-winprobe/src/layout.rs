@@ -61,6 +61,13 @@ pub fn unload(h: Hkl) -> bool {
 /// foreground/focus window).
 pub fn request_switch(target: Hwnd, h: Hkl) -> bool {
     // SAFETY: posting a documented message with integer parameters to our own window.
-    unsafe { PostMessageW(Some(target.raw()), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(h.0)) }
-        .is_ok()
+    unsafe {
+        PostMessageW(
+            Some(target.raw()),
+            WM_INPUTLANGCHANGEREQUEST,
+            WPARAM(0),
+            LPARAM(h.0),
+        )
+    }
+    .is_ok()
 }

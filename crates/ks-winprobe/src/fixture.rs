@@ -20,11 +20,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetFocus, SetFocus};
 use windows::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, CreateWindowExW, DefWindowProcW, DispatchMessageW, ES_AUTOHSCROLL,
     ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_WANTRETURN, GetForegroundWindow, GetMessageW,
-    GetWindowThreadProcessId, HMENU, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    SW_SHOW, SendMessageW, SetForegroundWindow, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-    WINDOW_STYLE, WM_APP, WM_CLOSE, WM_DESTROY, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT,
-    WNDCLASSW, WS_BORDER, WS_CHILD, WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_VISIBLE,
-    WS_VSCROLL,
+    GetWindowThreadProcessId, HMENU, MSG, PostMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
+    SendMessageW, SetForegroundWindow, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WNDCLASSW, WS_BORDER,
+    WS_CHILD, WS_EX_CLIENTEDGE, WS_OVERLAPPEDWINDOW, WS_VISIBLE, WS_VSCROLL,
 };
 use windows::core::{PCWSTR, w};
 
@@ -162,7 +161,14 @@ impl Fixture {
     /// Closes the window and joins the thread.
     fn shutdown(&mut self) {
         // SAFETY: posting WM_CLOSE to our own window; a stale handle only makes the call fail.
-        let _ = unsafe { PostMessageW(Some(self.controls.main.raw()), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        let _ = unsafe {
+            PostMessageW(
+                Some(self.controls.main.raw()),
+                WM_CLOSE,
+                WPARAM(0),
+                LPARAM(0),
+            )
+        };
         if let Some(j) = self.join.take() {
             let _ = j.join();
         }
@@ -239,7 +245,14 @@ pub fn get_sel(h: Hwnd) -> (u32, u32) {
 pub fn replace_sel(h: Hwnd, text: &str, can_undo: bool) {
     let buf = wide(text);
     // SAFETY: `buf` is NUL-terminated and alive until the synchronous call returns.
-    unsafe { send(h, EM_REPLACESEL, usize::from(can_undo), buf.as_ptr() as isize) };
+    unsafe {
+        send(
+            h,
+            EM_REPLACESEL,
+            usize::from(can_undo),
+            buf.as_ptr() as isize,
+        )
+    };
 }
 
 /// Sends an integer-only edit message (`WM_UNDO`, `EM_UNDO`, `EM_CANUNDO`, ...).
@@ -272,7 +285,8 @@ static REGISTER: Once = Once::new();
 
 fn create_windows() -> Result<Controls, String> {
     // SAFETY: NULL module name = handle of the current executable; no ownership transferred.
-    let module = unsafe { GetModuleHandleW(PCWSTR::null()) }.map_err(|e| format!("GetModuleHandleW: {e}"))?;
+    let module = unsafe { GetModuleHandleW(PCWSTR::null()) }
+        .map_err(|e| format!("GetModuleHandleW: {e}"))?;
     let hinst = HINSTANCE::from(module);
     // Msftedit.dll provides RICHEDIT50W. It stays loaded for the life of the process.
     // SAFETY: loading a system DLL by name; we never free it, so the class stays valid.

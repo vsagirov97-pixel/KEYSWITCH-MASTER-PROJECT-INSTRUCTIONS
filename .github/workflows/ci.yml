@@ -73,6 +73,34 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  windows-probe:
+    # Spike S-2a: Win32/UIA/SendInput/clipboard/layout/hotkey probe on the runner's desktop.
+    # Reports are metadata-only KS-PROBE lines (no text content); they are also published
+    # as one job annotation so results can be read without downloading logs.
+    name: Windows integration probe (S-2a)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      KS_WINPROBE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Probe tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test -p ks-winprobe -- --nocapture --test-threads=1 2>&1 | tee probe.log
+      - name: Publish KS-PROBE lines
+        if: always()
+        shell: bash
+        run: |
+          lines="$(grep -o 'KS-PROBE .*' probe.log | sed 's/\r$//' || true)"
+          { echo '## KS-PROBE'; echo '```'; echo "$lines"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          msg="$(printf '%s' "$lines" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')"
+          echo "::notice title=KS-PROBE results::${msg}"
+
   supply-chain:
     name: Supply chain
     runs-on: ubuntu-latest
