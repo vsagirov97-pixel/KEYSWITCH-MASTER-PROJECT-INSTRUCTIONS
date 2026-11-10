@@ -36,6 +36,9 @@
 | LF-6 | **WebView2 Runtime / загрузчик** — проприетарный компонент Microsoft; установщик Tauri по умолчанию **скачивает** WebView2 bootstrapper при установке (сетевой вызов, противоречит PRIV-7 «без пингов в установщике», если не изменить режим) — **UNVERIFIED** для текущего `tauri.conf.json` (режим `webviewInstallMode` не задан) | Средняя (юридически — условия распространения MS; продуктово — заявление «без сети») | Release Engineer: проверить режим; CLO: проверить условия распространения WebView2 (Microsoft) | до GATE 9 |
 | LF-7 | **Шрифт Segoe UI / Segoe UI Variable — проприетарный Microsoft**: допустимо только ссылаться на системный шрифт в CSS, **запрещено** включать файлы шрифта в установщик или в сайт | Низкая (сейчас соблюдено — [DS] использует системные шрифты) | Правило для дизайна/сайта: файлы Segoe не распространять; для сайта — web-safe fallback или OFL-шрифт | постоянно |
 | LF-8 | **PySide6 (LGPL-3.0/GPL) и Qt** — только тестовая фикстура CI; станет распространением, если попадёт в публичный артефакт CI | Низкая | Не загружать фикстуру/окружение PySide в артефакты; не включать в установщик | при S-2 |
+| LF-9 | **`tauri-plugin-updater` (план, D-25)** тянет сетевой и криптографический стек (`reqwest`, `rustls`/`ring` или `aws-lc-rs`, `webpki-roots`, `minisign-verify`, `zip`), в т.ч. лицензии **вне** текущего allow-list `deny.toml`: `ISC`, `Apache-2.0 AND ISC` (`ring`), `CDLA-Permissive-2.0` (`webpki-roots`), возможно `OpenSSL`-подобные части `aws-lc-sys` — см. §5.1 | Средняя (юридически пермиссивно; процедурно — изменение `deny.toml` и снятие запрета CISO SR-62 на плагин `updater`) | Добавление — только по проекту `UPDATE_SECURITY_ARCHITECTURE.md`, одобренному CISO и CLO (D-25); CLO одобряет расширение allow-list на `ISC`, `CDLA-Permissive-2.0` **точечно** (`[[licenses.exceptions]]` по крейту), не глобально | GATE 10 |
+| LF-10 | **macOS-сборка (D-24)**: свой граф зависимостей (`objc2-*`, `core-foundation*`, `security-framework`, `osakit`) + системные фреймворки Apple; распространение требует **Apple Developer Program License Agreement** (подпись Developer ID, нотаризация) — договор с Apple, а не OSS-лицензия | Средняя | Отдельный notice-файл для macOS-бандла из фактической сборки; см. §4.2; договор Apple — `LEGAL_COMPLIANCE_REGISTER.md` R-12 | GATE 16 |
+| LF-11 | **Шрифты Apple (SF Pro / SF Mono / SF Compact / New York) не распространяемы**: лицензия Apple разрешает их только для макетов UI Apple-платформ и **запрещает встраивание в ПО, сайт, документацию** (проверено 2026-11-10, developer.apple.com/fonts, §2A–2B) | Средняя (если дизайнер/фронтенд скопирует файлы шрифтов) | В приложении — только системный шрифт по имени (`-apple-system`, `system-ui`, `ui-monospace`); файлы `.otf/.ttf` SF не класть в репозиторий, бандл, сайт, макеты для печати/маркетинга; для сайта — OFL-шрифт | постоянно |
 
 Копилефт с сильным эффектом (GPL/AGPL) в текущем Windows-графе **не обнаружен**. LGPL встречается только как альтернатива в `r-efi` (UEFI, не Windows; выбирается MIT) и в тестовой фикстуре PySide6.
 
@@ -72,7 +75,7 @@
 | `wry`, `tao`, `muda`, `webview2-com(-sys)` | 0.57.1, 0.37.2, 0.20.0, 0.39.1 | Apache-2.0 OR MIT; `tao` — Apache-2.0; `webview2-com*` — MIT | Да | Да | Нет | Да / Да | Notice; `webview2-com-sys` — проверить, не включает ли он заголовки/библиотеки WebView2 SDK под лицензией Microsoft (UNVERIFIED) |
 | `windows`, `windows-core`, `windows-sys` | 0.62.2 | MIT OR Apache-2.0 | Да | Да | Нет | Да / Да | Notice |
 | `tauri-build` (build) | 2.7.4 | Apache-2.0 OR MIT | Да | Нет (не распространяется) | Нет | Да / Да | — |
-| `ks-core` (собственный) | 0.1.0 | `LicenseRef-Proprietary` | — | — | — | — | См. LF-2 |
+| `ks-core`, `keyswitch` (собственные) | 0.1.0 | `LicenseRef-Proprietary` — закрытая лицензия, файл `LICENSE` (D-22(3)) | — | — | — | — | Права конечного пользователя — только по EULA (`docs/EULA_DRAFT.md`); EULA обязана исключать сторонние компоненты из своих ограничений (см. §6) |
 
 ---
 
@@ -104,6 +107,32 @@
 
 ---
 
+### 4.1 Лицензия самого KeySwitch (D-22(3))
+
+| Объект | Режим | Что это значит | Действие |
+|---|---|---|---|
+| Исходный код (`crates/`, `app/`) в публичном репозитории (D-09) | `LICENSE`: «All rights reserved», лицензия не предоставляется; публичная видимость — не лицензия | Посторонние вправе только просматривать (и форкать в пределах GitHub Terms of Service, §D.5 — UNVERIFIED, сайт GitHub Docs из сессии недоступен) | README-пометка «proprietary, external contributions not accepted» |
+| Бинарь (установщик) | Права пользователя — по **EULA** (`docs/EULA_DRAFT.md`), бесплатная неисключительная лицензия на использование | Без EULA `LICENSE` формально запрещает использование | EULA — показывать в установщике/«О программе», ссылка в README |
+| Встроенные данные CC-BY-SA-4.0 (`*.freq`) | Собственная лицензия данных, `LICENSE` это прямо оговаривает | EULA не может ограничивать эти данные (CC BY-SA §2(a)(5)(C)) | Отдельный пункт EULA §7 (сделано в черновике) |
+| Сторонние компоненты | По своим лицензиям | EULA не может их ограничивать | THIRD_PARTY_NOTICES (LA-3) |
+| Название, иконка | Не лицензируются EULA; товарный знак не зарегистрирован (B-3) | — | `docs/legal/name-and-ip-review.md` |
+
+### 4.2 macOS-компоненты (D-24) — предварительная ревизия, UNVERIFIED (macOS-сборки ещё нет)
+
+| Компонент | Распространяется с KeySwitch? | Лицензия / договор | Обязательства | Действие |
+|---|---|---|---|---|
+| Системные фреймворки Apple: AppKit, Foundation, ApplicationServices/**Accessibility (AXUIElement)**, Carbon/**Text Input Sources (TIS)**, NSPasteboard, ServiceManagement (Login Items), WebKit (`WKWebView` — WebView Tauri на macOS), Security.framework | **Нет** — вызываются как системные API ОС пользователя; динамическая линковка с `/System/Library` | Лицензия macOS у пользователя; для разработчика — Apple Developer Program License Agreement (DPLA) и Xcode/SDK License Agreement (UNVERIFIED — текст не перечитан) | Атрибуции не требуется; **не копировать** заголовки/библиотеки SDK в репозиторий; соблюдать ограничения DPLA на использование приватных API (если запрещено — риск отзыва сертификата) | Platform Lead macOS: использовать только публичные API |
+| Rust-биндинги `objc2-*` (`Zlib OR Apache-2.0 OR MIT`), `core-foundation*`, `core-graphics*` (`MIT OR Apache-2.0`), `security-framework` (`MIT OR Apache-2.0`), `block2`, `dispatch2` | **Да** (в macOS-бинарь) | Пермиссивные (см. Прил. А, группа C) | Notice | macOS notice-файл (LA-3m) |
+| `osakit` (`MIT OR Apache-2.0`) — зависимость `tauri-plugin-updater` только на macOS (AppleScript для запроса прав при установке обновления) | Да, если включён updater | Пермиссивная | Notice | Учесть в LF-9 |
+| `flate2`/`tar` (updater, macOS) | Да | `MIT OR Apache-2.0` | Notice | — |
+| Иконка `.icns`, `Info.plist`, entitlements | Да | Собственные | — | Не использовать изображения/глифы Apple (SF Symbols — только по лицензии Apple для UI на Apple-платформах, **не в логотипе и не на Windows**, UNVERIFIED) |
+| Шрифты SF Pro / SF Mono / New York | **Нет и не допускается** | Лицензия Apple Font: только макеты UI Apple-платформ; запрет встраивания и распространения (проверено 2026-11-10) | — | LF-11; в CSS `-apple-system, system-ui`, `ui-monospace, "SF Mono", Menlo` **по имени** — допустимо (шрифт предоставляет ОС) |
+| Menlo / Helvetica / прочие системные шрифты macOS | Нет | Лицензия macOS | — | Только по имени |
+| Нотаризация / `codesign` / `notarytool` | Инструменты Apple на CI-раннере, не распространяются | DPLA / Xcode License | Отправка бинаря в Apple для нотаризации — передача кода Apple (не ПД пользователей) | См. LEGAL R-12 |
+| Возможный DMG-фон, инсталлятор `.pkg` | Да | Собственные | — | — |
+
+**Вывод CLO (macOS):** лицензионных препятствий нет; ключевые риски — договорные (DPLA, Mac App Store Review Guidelines) и шрифты/символы Apple. Перепроверить по фактическому графу `cargo tree --target aarch64-apple-darwin` и `x86_64-apple-darwin`, когда появится macOS-адаптер.
+
 ## 5. Планируемые компоненты ([DEP], [DS]) — оценка до добавления
 
 | Компонент | Версия (план) | Лицензия | Комм. | Атриб. | Исх. | Совм. P / OSS | Требуемое действие |
@@ -123,7 +152,28 @@
 
 ---
 
-## 6. Совместимость с моделями лицензирования KeySwitch (MI-19)
+### 5.1 `tauri-plugin-updater` и его граф (план по D-25) — предварительная оценка
+
+Источник: crates.io API (запрос 2026-11-10, анонимный клиент): последняя стабильная `2.14.1` (опубликована **2026-10-28** — на 2026-11-10 моложе 2 недель, правило CLAUDE.md п.3 → допустима `2.14.0` от 2026-10-14 или `2.14.1` не ранее 2026-11-11); лицензия `Apache-2.0 OR MIT`. Зависимости `2.14.1` — из того же API; лицензии зависимостей — из crates.io по последней версии (не по lock-файлу — **UNVERIFIED до добавления в `Cargo.lock`**).
+
+| Компонент | Платформа | Лицензия | Комм. | Атриб. | Исх. | В allow-list `deny.toml`? | Действие |
+|---|---|---|---|---|---|---|---|
+| `tauri-plugin-updater` 2.14.x | все | Apache-2.0 OR MIT | Да | Да | Нет | Да | Notice; плагин и TLS-стеки в бан-листе CISO (`SECURITY_REVIEW.md` SEC-38, SR-62; §6 п.3) — снять только по D-25 через GATE 10 |
+| `minisign-verify` 0.3 (проверка подписи пакета) | все | MIT | Да | Да | Нет | Да | Notice |
+| `reqwest` 0.13 | все | MIT OR Apache-2.0 | Да | Да | Нет | Да | Notice |
+| `rustls` 0.23 (опц., feature `rustls-tls`) | все | Apache-2.0 OR ISC OR MIT | Да | Да | Нет | Да (выбрать MIT) | Notice |
+| `ring` 0.17 (если `rustls` с `ring`) | все | **Apache-2.0 AND ISC** (исторически также OpenSSL/BoringSSL-уведомления — UNVERIFIED для 0.17.14) | Да | Да | Нет | **Нет (`ISC`)** | Исключение `[[licenses.exceptions]] crate="ring"`; перечитать `LICENSE` пакета при добавлении |
+| `aws-lc-rs` / `aws-lc-sys` (если провайдер по умолчанию в `reqwest` 0.13 — UNVERIFIED) | все | ISC AND (Apache-2.0 OR ISC) AND MIT AND BSD-3-Clause … (составная) | Да | Да (много уведомлений) | Нет | **Нет** | Предпочесть `ring` (проще notice); решение — архитектор + CISO; CLO не возражает ни против одного варианта |
+| `webpki-roots` 1.x (корневые сертификаты Mozilla) | все | **CDLA-Permissive-2.0** | Да | Да (текст CDLA) | Нет | **Нет** | Исключение по крейту; альтернатива — `rustls-platform-verifier` (MIT OR Apache-2.0, системное хранилище — лучше для корпоративных прокси); выбор — CISO |
+| `hyper`, `hyper-util`, `http`, `tokio`, `futures-*`, `tower*` | все | MIT / MIT OR Apache-2.0 | Да | Да | Нет | Да | Notice |
+| `zip` 9.x (Windows, распаковка обновления) | Windows | MIT | Да | Да | Нет | Да | Notice |
+| `tempfile`, `semver`, `time`, `url`, `infer`, `base64`, `percent-encoding` | все | MIT OR Apache-2.0 / MIT | Да | Да | Нет | Да | Notice |
+| `osakit`, `flate2`, `tar`, `libc` | macOS | MIT OR Apache-2.0 | Да | Да | Нет | Да | Notice |
+
+**Вывод CLO:** лицензии updater-графа **совместимы с проприетарным KeySwitch**, копилефта нет. Требуется: (1) точечные исключения `ISC`/`CDLA-Permissive-2.0` в `deny.toml` (правит архитектор/Release, CLO — одобрение в PR); (2) регенерация notice-файла; (3) запрос updater — единственный сетевой канал (D-25), правовой анализ данных запроса — `LEGAL_COMPLIANCE_REGISTER.md` R-11, `docs/PRIVACY_POLICY_DRAFT.md` §4.
+По исходнику `plugins/updater/src/updater.rs` (ветка `v2`, загружен 2026-11-10): запрос содержит `User-Agent: tauri-plugin-updater/<версия>`, заголовок `Accept`, необязательные пользовательские заголовки и URL с подстановками `{{current_version}}`, `{{target}}`, `{{arch}}`, `{{bundle_type}}` — **рекомендация CLO: не добавлять собственных заголовков/идентификаторов** (см. R-11).
+
+## 6. Совместимость с моделями лицензирования KeySwitch (решено: проприетарная, D-22(3))
 
 | Модель KeySwitch | Совместимость текущего и планируемого набора | Что потребуется |
 |---|---|---|
@@ -132,7 +182,7 @@
 | Open core (ядро OSS + платные модули) | **Совместимо** | Чёткая граница модулей; CLA/DCO для внешних вкладов; товарный знак — отдельно |
 | Copyleft (GPL-3.0 / AGPL) + коммерческая лицензия | Совместимо (Apache-2.0, MPL-2.0 совместимы с GPL-3.0; **Apache-2.0 несовместим с GPL-2.0-only** — не выбирать GPL-2.0-only) | Обязателен CLA с передачей/лицензированием прав, иначе двойное лицензирование невозможно |
 
-Вывод CLO: **ни одна из текущих зависимостей не блокирует ни одну из моделей**; блокирующим фактором является только R-7 (данные) и отсутствие решения MI-19.
+Вывод CLO: **ни одна из текущих и планируемых зависимостей (включая updater-граф и macOS-биндинги) не блокирует выбранную проприетарную модель**; блокирующим фактором остаётся только R-7 (данные CC-BY-SA). Строки об OSS-моделях сохранены для справки на случай пересмотра D-22(3).
 
 ---
 
@@ -147,11 +197,16 @@
 | LA-5 | `deny.toml`: сохранить allow-list; при добавлении CPython добавить `PSF-2.0` только для конкретных артефактов (они не крейты — учёт вручную в этом реестре); **не добавлять** в allow-list GPL/AGPL/LGPL/SSPL/BUSL/CC-BY-NC без решения CLO | AGENT 03 / 09 | CLO | постоянно |
 | LA-6 | Проверить `webviewInstallMode` и условия распространения WebView2 | AGENT 09 + CLO | CISO (сеть в установщике) | до GATE 9 |
 | LA-7 | При каждом новом PR с зависимостью — обновлять этот реестр (п. 3 CLAUDE.md: назначение, лицензия, риск) | автор PR | CLO (legal review по триггерам, legal-team-plan §4) | постоянно |
+| LA-8 | Обновить ссылку в `LICENSE` на `docs/SOFTWARE_LICENSE_REGISTER.md`; README — «Proprietary. External contributions are not accepted.» | Project Director | CLO | ближайший PR `docs/*` |
+| LA-9 | При добавлении `tauri-plugin-updater`: точечные исключения `deny.toml` (`ring` — ISC; `webpki-roots` — CDLA-Permissive-2.0), регенерация notice, обновление §5.1 по `Cargo.lock` | AGENT 03 / 09 | CLO + CISO | GATE 10 |
+| LA-3m | Отдельный notice-файл для macOS-бандла (`Contents/Resources/THIRD_PARTY_NOTICES`) из фактической macOS-сборки | AGENT 09 + macOS Platform Lead | CLO | GATE 16 |
+| LA-10 | Правило дизайна/фронтенда: файлы шрифтов SF/New York и SF Symbols не включать в репозиторий, бандл, сайт, маркетинг (LF-11) | AGENT 04 / 06 | CLO | постоянно |
 
 ## 8. История изменений
 | Дата | Изменение | Автор |
 |---|---|---|
 | 2026-11-10 | Первая редакция: 403 Rust-пакета (130 в бинаре), 100 npm, данные, планируемые компоненты | AGENT 12 CLO |
+| 2026-11-10 | Ред. 2 (V7): переименование в SOFTWARE_LICENSE_REGISTER; §4.1 лицензия KeySwitch (проприетарная, D-22(3)), LF-2 обновлён; LF-9/§5.1 `tauri-plugin-updater` (D-25); LF-10/§4.2 macOS (D-24); LF-11 шрифты Apple; LA-8…LA-10, LA-3m | AGENT 12 CLO |
 
 ---
 

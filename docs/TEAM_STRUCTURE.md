@@ -25,6 +25,7 @@ graph TD
   CISO --> A07[07 Security Analyst]
   CISO --> A14[14 Runtime Security]
   CISO --> A15[15 Windows Security]
+  CISO --> A21[21 macOS Security]
   CLO --> A16[16 Licensing Specialist]
 ```
 
@@ -51,6 +52,7 @@ graph TD
 | 17 | **Business Analyst** (бывш. B2B Researcher) | `b2b-researcher.md` | **Senior** | Product & Market | B2B/Business/Enterprise-исследование с честной маркировкой доказательств, найден риск VDI | — |
 | 18 | **Finance Manager** (новый) | `finance-manager.md` | Middle | → PD | V7 §15: финансовая модель отсутствовала | — |
 | 19 | **macOS Platform Lead** (новый) | `macos-platform-lead.md` | Lead (назначен; уровень подтверждается по итогам M-1) | Lead, macOS Platform | V7 §9.2: macOS — обязательная платформа, компетенции не было | — |
+| 21 | **macOS Platform Security** (новый) | `macos-security.md` (чтение) | Middle | Security | запрос CISO: независимое ревью macOS-платформы | через CISO |
 | 20 | **Windows Platform Lead** (новый) | `windows-platform-lead.md` | Lead (назначен; подтверждается по итогам S-2) | Lead, Windows Platform | V7 §4: отдельное руководство Windows-платформой; AGENT 05 нужен независимый технический ревьюер | — |
 
 ## Команды
@@ -60,9 +62,9 @@ graph TD
 | Product & Market | 02 | 02, 10, 17 | рынок B2C (10), бизнес/B2B (17), требования и критерии (02) | BL-PRD, BL-MKT, BL-COM | PD; CISO/CLO по триггерам |
 | Core Engineering | 03 | 03, 13 | архитектура, ядро, песочница, обновления (проект), ADR | BL-ARCH, BL-CORE, BL-SBX, BL-UPD | CISO (14), QA |
 | Windows Platform | 20 | 20, 05 | Windows-адаптер, профили приложений, матрица Windows | BL-WIN, S-2 | CISO (15), QA, ручная приёмка |
-| macOS Platform | 19 | 19 (+ разработчик macOS — при начале реализации) | macOS-адаптер, разрешения, CI macOS, матрица macOS | BL-MAC | CISO, QA, ручная приёмка на Mac |
+| macOS Platform | 19 | 19 (+ разработчик macOS — при начале реализации) | macOS-адаптер, разрешения, CI macOS, матрица macOS | BL-MAC | CISO (21), QA, ручная приёмка на Mac |
 | Design & Frontend | 04 | 04, 06 | дизайн-система, UI, i18n, доступность | BL-DES, BL-UI | PD, QA |
-| Security | 11 CISO | 07, 14, 15 | безопасность продукта, уязвимости, политика экстренных патчей, ключи подписи | BL-SEC | независима |
+| Security | 11 CISO | 07, 14, 15, 21 | безопасность продукта, уязвимости, политика экстренных патчей, ключи подписи | BL-SEC | независима |
 | Legal & Compliance | 12 CLO | 16 | право ЕС, лицензии, SBOM-лицензии, проекты EULA/ToS/Privacy | BL-LEG | независима; юрист-человек по необходимости |
 | Finance (индивидуально) | 18 → PD | 18 | затраты, сценарии, экономика тарифов | BL-FIN | PD |
 | QA / Release (индивидуально) | 08, 09 → PD | 08, 09 | тестирование; CI/CD, сборка, подпись, публикация обновлений | BL-QA, BL-REL | CISO (release security) |
@@ -82,3 +84,4 @@ graph TD
 | 2026-11-10 | По запросам директоров: 14 Runtime Security, 15 Windows Security, 16 Licensing Specialist. |
 | 2026-11-10 | V4: 17 B2B Researcher. |
 | 2026-11-10 | V7: 17 → Business Analyst (повышен до Senior по качеству исследования); новые 18 Finance Manager, 19 macOS Platform Lead, 20 Windows Platform Lead; команда Engineering разделена на Core Engineering, Windows Platform, macOS Platform. |
+| 2026-11-10 | По запросу CISO: 21 macOS Platform Security; D-27 (запрет CGEventTap/Input Monitoring). |
