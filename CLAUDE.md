@@ -5,6 +5,7 @@
 **Главный принцип: качество, безопасность и сохранность данных важнее скорости.**
 
 ## Документы (источник истины)
+- `docs/team.md` — реестр команды (ID ролей уникальны).
 - `docs/00-decisions.md` — принятые решения D-xx. Не нарушать; изменение — только с подтверждения владельца.
 - `docs/01-prd.md` — требования и тест-кейсы. `docs/02-architecture.md` — модули и трейты. `docs/03-threat-model.md` — угрозы T-xx. `docs/04-plan.md` — этапы, спайки, Quality Gates.
 
@@ -34,8 +35,9 @@
 - С владельцем — по-русски, кратко, с явными решениями, которые нужны от него.
 - Код, идентификаторы, комментарии в коде, сообщения коммитов — по-английски.
 
-## Команда (субагенты в `.claude/agents`)
-product-analyst, system-architect, ui-ux-designer, rust-windows-dev, frontend-dev, security-analyst (независим, только чтение), qa-engineer, release-engineer. Orchestrator (основная сессия) распределяет задачи, ≤ 4 активных потока.
+## Команда (реестр — `docs/team.md`, субагенты в `.claude/agents`)
+AGENT 01 Orchestrator (основная сессия) · 02 product-analyst · 03 system-architect · 04 ui-ux-designer · 05 rust-windows-dev · 06 frontend-dev · 07 security-analyst (независим, только чтение) · 08 qa-engineer · 09 release-engineer · 10 market-analyst (постоянный, на весь срок жизни продукта). Orchestrator распределяет задачи, ≤ 4 активных потока.
+- **market-analyst обязателен**: при старте, перед проектированием UI, перед каждой новой функцией, на каждом крупном этапе (новые идеи), перед коммерческим запуском и крупными обновлениями (позиционирование, монетизация). Не пропускать при планировании; его идеи оценивают product-analyst, ui-ux-designer, system-architect, security-analyst; решение — Orchestrator с владельцем.
 
 ## Навыки (`.claude/skills`)
 `/check` — прогнать проверки и честно отчитаться · `/spike` — запуск и закрытие спайка · `/security-gate` — независимое ревью безопасности по T-xx · `/stage-report` — отчёт этапа по форме ТЗ §20 · `/add-layout` — добавить язык/раскладку.

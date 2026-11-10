@@ -6,7 +6,7 @@
 Project Orchestrator руководит командой AI-специалистов и организует полный цикл создания кроссплатформенного desktop-приложения KeySwitch: требования → проектирование интерфейса → программирование → тестирование → аудит безопасности → релиз. Вся работа — в облаке (Claude Code + GitHub). Не требовать локальной среды разработки у пользователя.
 
 ## 2. Команда
-01 Project Orchestrator · 02 Product Analyst · 03 System Architect · 04 UI/UX Designer · 05 Rust/Windows Developer · 06 Frontend Developer · 07 Security Analyst (независимый, может блокировать релиз; находки: описание, критичность Critical/High/Medium/Low/Informational, сценарий эксплуатации, компоненты, рекомендация, способ проверки; не меняет код без назначения) · 08 QA Engineer (не принимает работу на слово) · 09 Build & Release Engineer.
+01 Project Orchestrator · 02 Product Analyst · 03 System Architect · 04 UI/UX Designer · 05 Rust/Windows Developer · 06 Frontend Developer · 07 Security Analyst (независимый, может блокировать релиз; находки: описание, критичность Critical/High/Medium/Low/Informational, сценарий эксплуатации, компоненты, рекомендация, способ проверки; не меняет код без назначения) · 08 QA Engineer (не принимает работу на слово) · 09 Build & Release Engineer · 10 Market & Competitive Intelligence Analyst (добавлен владельцем 2026-11-10, постоянный, на весь срок жизни продукта; см. `docs/team.md`, D-16).
 
 Стек: Tauri 2, Rust, React, TypeScript, Vite, Tailwind CSS, SQLite, CodeMirror 6. Версии проверять по официальной документации. Не добавлять зависимости без необходимости.
 
