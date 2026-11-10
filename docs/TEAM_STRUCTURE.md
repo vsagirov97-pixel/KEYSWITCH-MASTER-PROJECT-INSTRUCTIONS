@@ -18,6 +18,7 @@ graph TD
   CLO --> LEG[Legal Team]
   LEG --> A16[AGENT 16 Licensing Specialist]
   PM --> A10[AGENT 10 Market Analyst]
+  PM --> A17[AGENT 17 B2B Researcher]
   ENG --> A05[AGENT 05 Windows Integration Dev]
   ENG --> A13[AGENT 13 Runtime & Sandbox Engineer]
   DES --> A06[AGENT 06 Frontend Dev]
@@ -47,6 +48,7 @@ CISO и CLO подчиняются Project Director только организ�
 | AGENT 14 | Runtime & WebAssembly Security Specialist (новый) | `runtime-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-3 | через CISO |
 | AGENT 15 | Windows Platform Security Specialist (новый) | `windows-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-2 | через CISO |
 | AGENT 16 | OSS & Data Licensing Specialist (новый) | `licensing-specialist.md` | Middle | Legal Team (→ CLO) | запрос CLO (LS-1): лицензии зависимостей, данных, notice-файлы | через CLO |
+| AGENT 17 | B2B & Enterprise Market Researcher (новый) | `b2b-researcher.md` | Middle | Product & Market Team | V4 ч. 8: исследование B2B/Enterprise — отдельная компетенция (развёртывание, лицензирование, IT-политики), Market Analyst ведёт B2C | — |
 | AGENT 13 | Runtime & Sandbox Engineer (новый) | `runtime-sandbox-dev.md` | Middle | Engineering Team; security-ревью — CISO | закрывает пробел компетенций WebAssembly/WASI/CPython/QuickJS/AppContainer для S-3 | — |
 
 Приостановленных ролей нет. Слияний ролей нет: Product Analyst и Market Analyst разделены (решение владельца).
@@ -55,7 +57,7 @@ CISO и CLO подчиняются Project Director только организ�
 
 | Команда | Руководитель | Состав | Зона ответственности | Передаёт результат |
 |---------|--------------|--------|----------------------|--------------------|
-| Product & Market | AGENT 02 (Lead) | 02, 10 | рынок, идеи, требования, MVP, критерии приёмки, матрица приложений | Project Director → GATE 3 |
+| Product & Market | AGENT 02 (Lead) | 02, 10, 17 | рынок, идеи, требования, MVP, критерии приёмки, матрица приложений | Project Director → GATE 3 |
 | Engineering | AGENT 03 (Lead) | 03, 05, 13 | архитектура, ядро, Windows-интеграция, песочница, качество кода | Project Director → GATE 4, 6, 7, 8 |
 | Design & Frontend | AGENT 04 (Lead) | 04, 06 | дизайн-система, прототипы, UI, i18n, доступность | Project Director → GATE 5 |
 | Security | AGENT 11 CISO | 07, 14, 15 (+ специалисты по запросу CISO) | безопасность всего продукта | GATE 10, security review задач |
@@ -77,3 +79,4 @@ QA и Release пока не образуют отдельных команд (п
 | 2026-11-10 | Директива V3: назначены AGENT 11 CISO и AGENT 12 CLO; AGENT 07 переподчинён CISO; созданы команды Product & Market, Engineering, Design & Frontend, Security, Legal; повышены 02, 03, 04 до Lead, 07 и 10 — Senior; добавлен AGENT 13 Runtime & Sandbox Engineer; AGENT 05 сфокусирован на Windows-интеграции. |
 | 2026-11-10 | По запросу CISO добавлены AGENT 14 Runtime & WebAssembly Security и AGENT 15 Windows Platform Security (ревьюеры S-3 и S-2, только чтение). |
 | 2026-11-10 | По запросу CLO добавлен AGENT 16 OSS & Data Licensing Specialist. |
+| 2026-11-10 | Директива V4: добавлен AGENT 17 B2B & Enterprise Market Researcher; Market Analyst отвечает за B2C, конкурентов и монетизацию. |

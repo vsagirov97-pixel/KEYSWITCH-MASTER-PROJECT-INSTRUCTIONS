@@ -5,7 +5,7 @@
 **Главный принцип: качество, безопасность и сохранность данных важнее скорости.**
 
 ## Документы (источник истины — `docs/PROJECT_MAP.md` §3)
-- Директива: `docs/master-instructions-v3.md` (+ продуктовые требования `docs/master-instructions.md`).
+- Директива: `docs/master-instructions-v4.md` (поверх V3 и V1). Платные функции и цены — только решение владельца (LEVEL 3).
 - `docs/00-decisions.md` — принятые решения D-xx. Не нарушать.
 - `docs/TEAM_STRUCTURE.md` — команда, уровни, руководители. `docs/DEVELOPMENT_WORKFLOW.md` — статусы задач, ревью, 12 gates.
 - `docs/SYSTEM_ARCHITECTURE.md` — архитектура. `docs/SECURITY_REVIEW.md` — реестр CISO. `docs/LEGAL_COMPLIANCE_REGISTER.md`, `docs/LICENSE_REGISTER.md` — реестры CLO.
@@ -39,7 +39,7 @@
 - Код, идентификаторы, комментарии в коде, сообщения коммитов — по-английски.
 
 ## Команда (реестр — `docs/TEAM_STRUCTURE.md`, субагенты в `.claude/agents`)
-AGENT 01 Project Director (основная сессия) · 02 product-analyst (Lead, Product & Market) · 03 system-architect (Lead, Engineering) · 04 ui-ux-designer (Lead, Design & Frontend) · 05 rust-windows-dev (Windows Integration) · 06 frontend-dev · 07 security-analyst (Senior, под CISO, только чтение) · 08 qa-engineer · 09 release-engineer · 10 market-analyst (Senior, постоянный) · **11 ciso** и **12 clo** — независимые директора с правом блокировки · 13 runtime-sandbox-dev. ≤ 4 активных потока.
+AGENT 01 Project Director (основная сессия) · 02 product-analyst (Lead, Product & Market) · 03 system-architect (Lead, Engineering) · 04 ui-ux-designer (Lead, Design & Frontend) · 05 rust-windows-dev (Windows Integration) · 06 frontend-dev · 07 security-analyst (Senior, под CISO, только чтение) · 08 qa-engineer · 09 release-engineer · 10 market-analyst (Senior, постоянный) · **11 ciso** и **12 clo** — независимые директора с правом блокировки · 13 runtime-sandbox-dev · 14 runtime-security · 15 windows-security · 16 licensing-specialist · 17 b2b-researcher. ≤ 4 активных потока.
 - Security Review (CISO) и Legal Review (CLO) — по триггерам `DEVELOPMENT_WORKFLOW.md` §1; их отрицательное заключение Project Director отменить не может.
 - **market-analyst обязателен**: при старте, перед проектированием UI, перед каждой новой функцией, на каждом крупном этапе (новые идеи), перед коммерческим запуском и крупными обновлениями (позиционирование, монетизация). Не пропускать при планировании; его идеи оценивают product-analyst, ui-ux-designer, system-architect, security-analyst; решение — Orchestrator с владельцем.
 

@@ -20,6 +20,7 @@
 | Право | Реестр соответствия, реестр лицензий, IP | 📄 (в работе) | `docs/LEGAL_COMPLIANCE_REGISTER.md`, `docs/LICENSE_REGISTER.md`, `docs/legal/` | AGENT 12 |
 | QA | Тесты ядра; корпус ≥ 500 фраз; чек-лист ручной приёмки | 🧪 / ⬜ | `crates/ks-core/tests` | AGENT 08 |
 | Сборка | CI: core (Linux), frontend, Windows build + NSIS (unsigned), supply chain | ✅ зелёный на `main` | `.github/workflows/ci.yml`, `deny.toml` | AGENT 09 |
+| Коммерция | Рынок B2C/B2B, Premium/Business/Enterprise, монетизация, предложение владельцу | 📄 (исследование в работе; ничего не утверждено) | `docs/commercial/`, `docs/COMMERCIAL_PRODUCT_PROPOSAL.md` | AGENT 10, 17 → PD |
 | Управление | Структура команды, workflow, roadmap, backlog, статус, риски | 📄 | `docs/*.md` (этот набор) | AGENT 01 |
 
 ## 2. Репозиторий
@@ -33,7 +34,8 @@
 
 | Тема | Источник истины | Устарело / заменено |
 |------|-----------------|---------------------|
-| Директива | `docs/master-instructions-v3.md` (+ продуктовые требования `master-instructions.md`) | — |
+| Директива | `docs/master-instructions-v4.md` (+ V3 и V1 для истории и деталей) | — |
+| Коммерция | `docs/COMMERCIAL_PRODUCT_PROPOSAL.md` + `docs/commercial/` | `docs/market/` (первичное исследование) |
 | Решения | `docs/00-decisions.md` | — |
 | Команда | `docs/TEAM_STRUCTURE.md` | `docs/team.md` (ссылка) |
 | Требования | `docs/research/pa-prd.md` → после GATE 3 переносится в `docs/01-prd.md` | `docs/01-prd.md` (черновик этапа 0) |
