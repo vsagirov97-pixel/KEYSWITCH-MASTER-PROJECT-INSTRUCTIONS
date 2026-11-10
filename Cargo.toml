@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/ks-core", "app/src-tauri"]
+members = ["crates/ks-core", "crates/ks-winprobe", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

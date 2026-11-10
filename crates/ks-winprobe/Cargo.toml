@@ -1,0 +1,43 @@
+[package]
+name = "ks-winprobe"
+description = "Spike S-2a: Windows integration probe (test fixture + integration tests). Not product code."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# This crate deliberately does not inherit `[workspace.lints]`: the workspace forbids
+# `unsafe`, but a Win32 probe cannot exist without FFI. Instead every `unsafe` block must
+# carry a `// SAFETY:` comment (enforced by `clippy::undocumented_unsafe_blocks`).
+# The remaining workspace lints are repeated here verbatim.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+undocumented_unsafe_blocks = "deny"
+
+# `windows` 0.62.2 is already in Cargo.lock (pulled in by Tauri), so no new crate enters the
+# graph; only the feature set below is new.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Com",
+  "Win32_System_DataExchange",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_Ole",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_Threading",
+  "Win32_UI_Accessibility",
+  "Win32_UI_Controls",
+  "Win32_UI_Controls_RichEdit",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }
