@@ -1,82 +1,84 @@
 # TEAM_STRUCTURE — организационная структура KeySwitch
 
-Действует с 2026-11-10 (директива V3). Заменяет `docs/team.md` (оставлен как ссылка). ID ролей уникальны и не переиспользуются. Уровни присвоены по фактически выполненной и проверенной работе; сертификатов и «опыта» агентам не приписывается.
+Редакция V7 (2026-11-10). ID ролей уникальны и не переиспользуются. Уровни присваиваются по подтверждённым результатам; сертификатов и стажа агентам не приписывается. Агенты — субагенты Claude Code (`.claude/agents/*.md`), запускаемые Project Director в облачной сессии; одновременно активно ≤ 4 рабочих потоков (ограничение бюджета и платформы).
 
 ## Иерархия
 
 ```mermaid
 graph TD
-  OWNER[Владелец продукта] --> PD[AGENT 01 Project Director]
-  PD -.->|организационно| CISO[AGENT 11 CISO]
-  PD -.->|организационно| CLO[AGENT 12 CLO]
-  PD --> PM[Product & Market Team<br/>Lead: AGENT 02]
-  PD --> ENG[Engineering Team<br/>Lead: AGENT 03]
-  PD --> DES[Design & Frontend Team<br/>Lead: AGENT 04]
-  PD --> QA[AGENT 08 QA]
-  PD --> REL[AGENT 09 Build & Release]
-  CISO --> SEC[Security Team]
-  CLO --> LEG[Legal Team]
-  LEG --> A16[AGENT 16 Licensing Specialist]
-  PM --> A10[AGENT 10 Market Analyst]
-  PM --> A17[AGENT 17 B2B Researcher]
-  ENG --> A05[AGENT 05 Windows Integration Dev]
-  ENG --> A13[AGENT 13 Runtime & Sandbox Engineer]
-  DES --> A06[AGENT 06 Frontend Dev]
-  SEC --> A07[AGENT 07 Security Analyst]
-  SEC --> A14[AGENT 14 Runtime/WASM Security]
-  SEC --> A15[AGENT 15 Windows Security]
+  OWNER[Владелец] --> PD[01 Project Director]
+  PD -.->|организационно, заключения независимы| CISO[11 CISO]
+  PD -.->|организационно, заключения независимы| CLO[12 CLO]
+  PD --> PM[Product & Market · Lead 02]
+  PD --> ENG[Core Engineering · Lead 03]
+  PD --> WIN[Windows Platform · Lead 20]
+  PD --> MAC[macOS Platform · Lead 19]
+  PD --> DES[Design & Frontend · Lead 04]
+  PD --> FIN[18 Finance Manager]
+  PD --> QA[08 QA]
+  PD --> REL[09 Build & Release]
+  PM --> A10[10 Market Analyst]
+  PM --> A17[17 Business Analyst]
+  ENG --> A13[13 Runtime & Sandbox]
+  WIN --> A05[05 Windows Integration Dev]
+  DES --> A06[06 Frontend Dev]
+  CISO --> A07[07 Security Analyst]
+  CISO --> A14[14 Runtime Security]
+  CISO --> A15[15 Windows Security]
+  CLO --> A16[16 Licensing Specialist]
 ```
-
-CISO и CLO подчиняются Project Director только организационно: их экспертные заключения независимы, отрицательное заключение не может быть отменено Project Director (эскалация — к владельцу).
 
 ## Реестр ролей
 
-| ID | Роль | Агент (`.claude/agents/`) | Уровень | Команда / подчинение | Основание уровня | Право блокировки |
-|----|------|---------------------------|---------|----------------------|------------------|------------------|
-| AGENT 01 | Project Director / CTO | основная сессия | Director | → владелец | назначен директивой V3 | gate-решения в пределах полномочий |
-| AGENT 02 | Product Analyst | `product-analyst.md` | **Lead** (повышен с Senior) | Lead, Product & Market Team | PRD v2 (US/FR/NFR с трассировкой), матрица 18 приложений, 119 граничных случаев; выявил 16 противоречий, часть подтверждена архитектором и Security | — |
-| AGENT 03 | System Architect | `system-architect.md` | **Lead** (Engineering Lead) | Lead, Engineering Team | исследование замены поля по исходникам Chromium/Qt и докам MS, архитектура v2, проверенные версии зависимостей; в перекрёстном ревью принял обоснованные исправления | архитектурные дефекты |
-| AGENT 04 | UI/UX Designer | `ui-ux-designer.md` | **Lead** (Design & Frontend Lead) | Lead, Design & Frontend Team | концепция, дизайн-система с расчётом контраста (96/96 AA), рабочий прототип, проверенный в headless Chrome | — |
-| AGENT 05 | Windows Integration Developer (бывш. Rust/Windows Dev) | `rust-windows-dev.md` | Middle | Engineering Team | ещё не выполнял задач как отдельный агент | — |
-| AGENT 06 | Frontend Developer | `frontend-dev.md` | Middle | Design & Frontend Team | ещё не выполнял задач | — |
-| AGENT 07 | Security Analyst | `security-analyst.md` (только чтение) | **Senior** | Security Team (→ CISO) | 53 угрозы, 28 находок со ссылками file:line, перекрёстное ревью с 10 новыми находками (подтверждены архитектором) | через CISO |
-| AGENT 08 | QA Engineer | `qa-engineer.md` | Middle | → Project Director (индивидуально, независимо от разработки) | ещё не выполнял задач | критические функциональные дефекты (GATE 9) |
-| AGENT 09 | Build & Release Engineer | `release-engineer.md` | Middle | → Project Director | ещё не выполнял задач | — |
-| AGENT 10 | Market & Competitive Intelligence Analyst | `market-analyst.md` | **Senior** | Product & Market Team; постоянный, на весь срок жизни продукта (D-16) | исследование ~20 конкурентов, 18 болей, 22 идеи; честно отметил непроверенное | — |
-| AGENT 11 | **CISO** — Director of Information Security & Product Security | `ciso.md` | Director | независимый директор | назначен директивой V3 | **да**: PR, функции, релиз при открытых Critical/High |
-| AGENT 12 | **CLO** — Legal Director & Head of EU Regulatory Compliance | `clo.md` | Director | независимый директор | назначен директивой V3 | **да**: юридически неподготовленный выпуск, несовместимые лицензии |
-| AGENT 14 | Runtime & WebAssembly Security Specialist (новый) | `runtime-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-3 | через CISO |
-| AGENT 15 | Windows Platform Security Specialist (новый) | `windows-security.md` (только чтение) | Middle | Security Team (→ CISO) | запрос CISO: независимое ревью S-2 | через CISO |
-| AGENT 16 | OSS & Data Licensing Specialist (новый) | `licensing-specialist.md` | Middle | Legal Team (→ CLO) | запрос CLO (LS-1): лицензии зависимостей, данных, notice-файлы | через CLO |
-| AGENT 17 | B2B & Enterprise Market Researcher (новый) | `b2b-researcher.md` | Middle | Product & Market Team | V4 ч. 8: исследование B2B/Enterprise — отдельная компетенция (развёртывание, лицензирование, IT-политики), Market Analyst ведёт B2C | — |
-| AGENT 13 | Runtime & Sandbox Engineer (новый) | `runtime-sandbox-dev.md` | Middle | Engineering Team; security-ревью — CISO | закрывает пробел компетенций WebAssembly/WASI/CPython/QuickJS/AppContainer для S-3 | — |
+| ID | Роль | Агент | Уровень | Команда | Основание уровня | Блокировка |
+|----|------|-------|---------|---------|------------------|------------|
+| 01 | Project Director / CTO | основная сессия | Director | → владелец | директива | приёмка/интеграция |
+| 02 | Product Analyst | `product-analyst.md` | **Lead** | Lead, Product & Market | PRD v2, матрица 18 приложений, 119 граничных случаев (проверено PD) | — |
+| 03 | System Architect | `system-architect.md` | **Lead** | Lead, Core Engineering | архитектура v2, анализ замены поля, принятые исправления после ревью | архитектурные дефекты |
+| 04 | UI/UX Designer | `ui-ux-designer.md` | **Lead** | Lead, Design & Frontend | дизайн-система (контраст 96/96 AA), прототип | — |
+| 05 | Windows Integration Developer | `rust-windows-dev.md` | Middle | Windows Platform | S-2a начат, не сдан | — |
+| 06 | Frontend Developer | `frontend-dev.md` | Middle | Design & Frontend | задач не было | — |
+| 07 | Security Analyst | `security-analyst.md` (чтение) | **Senior** | Security | 53 угрозы, 28+10 находок, подтверждены ревью | через CISO |
+| 08 | QA Engineer | `qa-engineer.md` | Middle | → PD | задач не было | GATE 11 |
+| 09 | Build & Release Engineer | `release-engineer.md` | Middle | → PD | задач не было | — |
+| 10 | Market & Competitive Intelligence Analyst | `market-analyst.md` | **Senior** | Product & Market; постоянный (D-16) | рынок, 22 идеи, B2C-исследование с маркировкой доказательств | — |
+| 11 | **CISO** | `ciso.md` | Director | независимый | директива | **да** |
+| 12 | **CLO** | `clo.md` | Director | независимый | директива | **да** |
+| 13 | Runtime & Sandbox Engineer | `runtime-sandbox-dev.md` | Middle | Core Engineering | S-3a начат, не сдан | — |
+| 14 | Runtime & WebAssembly Security | `runtime-security.md` (чтение) | Middle | Security | ревью S-3 (впереди) | через CISO |
+| 15 | Windows Platform Security | `windows-security.md` (чтение) | Middle | Security | ревью S-2 (впереди) | через CISO |
+| 16 | OSS & Data Licensing Specialist | `licensing-specialist.md` | Middle | Legal | задачи впереди | через CLO |
+| 17 | **Business Analyst** (бывш. B2B Researcher) | `b2b-researcher.md` | **Senior** | Product & Market | B2B/Business/Enterprise-исследование с честной маркировкой доказательств, найден риск VDI | — |
+| 18 | **Finance Manager** (новый) | `finance-manager.md` | Middle | → PD | V7 §15: финансовая модель отсутствовала | — |
+| 19 | **macOS Platform Lead** (новый) | `macos-platform-lead.md` | Lead (назначен; уровень подтверждается по итогам M-1) | Lead, macOS Platform | V7 §9.2: macOS — обязательная платформа, компетенции не было | — |
+| 20 | **Windows Platform Lead** (новый) | `windows-platform-lead.md` | Lead (назначен; подтверждается по итогам S-2) | Lead, Windows Platform | V7 §4: отдельное руководство Windows-платформой; AGENT 05 нужен независимый технический ревьюер | — |
 
-Приостановленных ролей нет. Слияний ролей нет: Product Analyst и Market Analyst разделены (решение владельца).
+## Команды
 
-## Команды и зоны ответственности
+| Команда | Руководитель | Состав | Зона ответственности | Backlog-префиксы | Независимая проверка |
+|---------|--------------|--------|----------------------|------------------|----------------------|
+| Product & Market | 02 | 02, 10, 17 | рынок B2C (10), бизнес/B2B (17), требования и критерии (02) | BL-PRD, BL-MKT, BL-COM | PD; CISO/CLO по триггерам |
+| Core Engineering | 03 | 03, 13 | архитектура, ядро, песочница, обновления (проект), ADR | BL-ARCH, BL-CORE, BL-SBX, BL-UPD | CISO (14), QA |
+| Windows Platform | 20 | 20, 05 | Windows-адаптер, профили приложений, матрица Windows | BL-WIN, S-2 | CISO (15), QA, ручная приёмка |
+| macOS Platform | 19 | 19 (+ разработчик macOS — при начале реализации) | macOS-адаптер, разрешения, CI macOS, матрица macOS | BL-MAC | CISO, QA, ручная приёмка на Mac |
+| Design & Frontend | 04 | 04, 06 | дизайн-система, UI, i18n, доступность | BL-DES, BL-UI | PD, QA |
+| Security | 11 CISO | 07, 14, 15 | безопасность продукта, уязвимости, политика экстренных патчей, ключи подписи | BL-SEC | независима |
+| Legal & Compliance | 12 CLO | 16 | право ЕС, лицензии, SBOM-лицензии, проекты EULA/ToS/Privacy | BL-LEG | независима; юрист-человек по необходимости |
+| Finance (индивидуально) | 18 → PD | 18 | затраты, сценарии, экономика тарифов | BL-FIN | PD |
+| QA / Release (индивидуально) | 08, 09 → PD | 08, 09 | тестирование; CI/CD, сборка, подпись, публикация обновлений | BL-QA, BL-REL | CISO (release security) |
 
-| Команда | Руководитель | Состав | Зона ответственности | Передаёт результат |
-|---------|--------------|--------|----------------------|--------------------|
-| Product & Market | AGENT 02 (Lead) | 02, 10, 17 | рынок, идеи, требования, MVP, критерии приёмки, матрица приложений | Project Director → GATE 3 |
-| Engineering | AGENT 03 (Lead) | 03, 05, 13 | архитектура, ядро, Windows-интеграция, песочница, качество кода | Project Director → GATE 4, 6, 7, 8 |
-| Design & Frontend | AGENT 04 (Lead) | 04, 06 | дизайн-система, прототипы, UI, i18n, доступность | Project Director → GATE 5 |
-| Security | AGENT 11 CISO | 07, 14, 15 (+ специалисты по запросу CISO) | безопасность всего продукта | GATE 10, security review задач |
-| Legal & Compliance | AGENT 12 CLO | 16 (+ LS-2 CRA/PLD до GATE 4, LS-3 Privacy/Consumer позже; внешние юристы — по решению владельца) | право ЕС и национальное, лицензии, IP, распространение | GATE 11, legal review задач |
-| QA (индивидуально) | AGENT 08 → Project Director | 08 | независимое функциональное тестирование | GATE 9 |
-| Build & Release (индивидуально) | AGENT 09 → Project Director | 09 | CI/CD, сборка, установщик | GATE 12 |
+Разделение аналитиков (V7 §4.1): Market Analyst — рынок, конкуренты, отзывы, тренды; Business Analyst — бизнес-процессы, корпоративные клиенты, B2B/Enterprise; Product Analyst — требования, спецификации, критерии приёмки; Finance Manager — затраты, модели, прогнозы, прибыльность.
 
-QA и Release пока не образуют отдельных команд (по одному участнику). Команда создаётся, когда в направлении появляется второй участник; тогда назначается Senior/Lead руководитель.
-
-## Правила повышения и замены
-- Повышение — после минимум одной задачи, принятой независимой проверкой (QA, CISO или перекрёстное ревью), с записью основания в этой таблице.
-- Понижение/замена — при повторных дефектах, обнаруженных проверяющими, или недостоверных отчётах.
-- Каждое изменение структуры — запись в журнале ниже; владелец не утверждает обычные кадровые изменения (V3, ч. 8).
+## Правила
+- Разработчик не принимает свою работу: код — ревью Lead команды; функционал — QA; безопасность — CISO/специалист; право — CLO.
+- Повышение — после работы, принятой независимой проверкой; запись основания в реестре. Регулярная оценка (V7 §16.4): качество, самостоятельность, точность, надёжность, соблюдение требований, сотрудничество.
+- Лиды, назначенные без истории (19, 20), подтверждаются по первому результату; при неудаче — замена.
 
 ## Журнал изменений
 | Дата | Изменение |
 |------|-----------|
-| 2026-11-10 | AGENT 10 Market Analyst добавлен (решение владельца, D-16). |
-| 2026-11-10 | Директива V3: назначены AGENT 11 CISO и AGENT 12 CLO; AGENT 07 переподчинён CISO; созданы команды Product & Market, Engineering, Design & Frontend, Security, Legal; повышены 02, 03, 04 до Lead, 07 и 10 — Senior; добавлен AGENT 13 Runtime & Sandbox Engineer; AGENT 05 сфокусирован на Windows-интеграции. |
-| 2026-11-10 | По запросу CISO добавлены AGENT 14 Runtime & WebAssembly Security и AGENT 15 Windows Platform Security (ревьюеры S-3 и S-2, только чтение). |
-| 2026-11-10 | По запросу CLO добавлен AGENT 16 OSS & Data Licensing Specialist. |
-| 2026-11-10 | Директива V4: добавлен AGENT 17 B2B & Enterprise Market Researcher; Market Analyst отвечает за B2C, конкурентов и монетизацию. |
+| 2026-11-10 | AGENT 10 Market Analyst (D-16). |
+| 2026-11-10 | V3: CISO (11), CLO (12), Runtime & Sandbox (13); повышения 02/03/04 → Lead, 07/10 → Senior. |
+| 2026-11-10 | По запросам директоров: 14 Runtime Security, 15 Windows Security, 16 Licensing Specialist. |
+| 2026-11-10 | V4: 17 B2B Researcher. |
+| 2026-11-10 | V7: 17 → Business Analyst (повышен до Senior по качеству исследования); новые 18 Finance Manager, 19 macOS Platform Lead, 20 Windows Platform Lead; команда Engineering разделена на Core Engineering, Windows Platform, macOS Platform. |
