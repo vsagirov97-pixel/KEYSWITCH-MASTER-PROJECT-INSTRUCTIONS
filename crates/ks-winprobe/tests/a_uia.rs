@@ -129,7 +129,9 @@ fn a1_focused_element_facts() {
         if f.is_password != expect_pw {
             problems.push("IsPassword mismatch");
         }
-        let ct_ok = if label == "rich" {
+        // Observed on windows-latest (run 42828479342): the UIA proxy reports multi-line
+        // EDIT and RICHEDIT50W as Document, single-line and password EDIT as Edit.
+        let ct_ok = if label == "multi" || label == "rich" {
             f.control_type == UIA_EDIT || f.control_type == UIA_DOCUMENT
         } else {
             f.control_type == UIA_EDIT
@@ -357,7 +359,13 @@ fn a4_selection_roundtrip() {
             "select_all_ok={doc_sel} em_getsel={}..{} em_select_all={}..{}",
             em.0, em.1, all.0, all.1
         ));
-        if !(doc_sel && em == all && all.1 > 0) {
+        // RichEdit keeps an implicit final paragraph mark: EM_SETSEL(0, -1) includes it, the
+        // UIA DocumentRange does not (observed, run 42828479342). Both cover all the text.
+        let rich_final_mark = label == "rich" && em.0 == 0 && em.1 + 1 == all.1;
+        if rich_final_mark {
+            notes.push("doc_range_excludes_final_paragraph_mark=true".into());
+        }
+        if !(doc_sel && (em == all || rich_final_mark) && all.1 > 0) {
             problems.push("select-all via TextRange does not cover the control");
         }
         r.field(label, notes.join(" "));

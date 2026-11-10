@@ -91,12 +91,13 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          cargo test -p ks-winprobe -- --nocapture --test-threads=1 2>&1 | tee probe.log
+          # --no-fail-fast: one failing scenario file must not hide the results of the others.
+          cargo test -p ks-winprobe --no-fail-fast -- --nocapture --test-threads=1 2>&1 | tee probe.log
       - name: Publish KS-PROBE lines
         if: always()
         shell: bash
         run: |
-          lines="$(grep -o 'KS-PROBE .*' probe.log | sed 's/\r$//' || true)"
+          lines="$(grep -o 'KS-PROBE {.*' probe.log | sed 's/\r$//' || true)"
           { echo '## KS-PROBE'; echo '```'; echo "$lines"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           msg="$(printf '%s' "$lines" | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')"
           echo "::notice title=KS-PROBE results::${msg}"
