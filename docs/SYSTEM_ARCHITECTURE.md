@@ -124,7 +124,7 @@ macOS — полноценная платформа с собственными 
 ## 11. Обновления (V7 §3, D-25)
 Единственный сетевой канал runtime (уточняет принцип 4 по D-25). Проект — `docs/UPDATE_SECURITY_ARCHITECTURE.md` (статус **Proposed**, нужны CISO и CLO, GATE 10; ADR-0009, ADR-0011); выпуск — `UPDATE_RELEASE_CHECKLIST.md`; сбои — `UPDATE_FAILURE_RECOVERY.md`.
 - Компоненты: `ks-update-core` (без I/O: проверка метаданных, подписей, версий) · `ks-updater` (отдельный exe, HTTP-стек ОС, AppContainer `internetClient` / App Sandbox `network.client`, без доступа к тексту) · update manager в `keyswitch` (расписание, безопасный момент, установка) · трейт `UpdateInstaller` в `ks-platform`.
-- Доверие: TUF-lite — `root` (офлайн, 2 из 3), `release`, `timestamp` (7 дней), `policy`; артефакты — minisign в формате Tauri с версией в доверенном комментарии; HTTPS обязателен, но не основа доверия.
+- Доверие: TUF-lite — `root` K-1 (офлайн, ≥ 2 корня), `release` K-2, `policy` K-3, `timestamp` K-4 (7 дней) по `SIGNING_KEY_MANAGEMENT.md`; артефакты — minisign в формате Tauri с версией в доверенном комментарии; HTTPS обязателен, но не основа доверия.
 - Правила: только вперёд по версии; `min_safe_version` не убывает; отозванные версии не ставятся; платформа/arch/ОС проверяются; установка — только в безопасный момент (нет операции/макроса); Windows — NSIS `currentUser`, macOS — без повышения прав.
 - Каналы STABLE (поэтапно) и EMERGENCY SECURITY (High/Critical без обычного подтверждения); подписанные emergency-политики только выключают функции; корпоративные политики (HKLM Policies / MDM) не обходятся.
 - Запрос: GET статических файлов, без версии, ОС и идентификаторов; телеметрии нет.

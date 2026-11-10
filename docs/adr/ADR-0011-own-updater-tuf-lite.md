@@ -15,7 +15,7 @@
 4. **Свой `ks-update-core` (без I/O) + `ks-updater` (HTTP ОС, AppContainer `internetClient`), формат артефактов и подписи Tauri.**
 
 ## Решение
-Вариант 4; запасной — 2. Роли `root` (офлайн, 2 из 3), `release`, `timestamp` (7 дней), `policy`; крипто — `minisign-verify =0.3.0`.
+Вариант 4; запасной — 2. Роли `root` K-1 (офлайн, ≥ 2 корня, порог в `root.json`), `release` K-2, `policy` K-3, `timestamp` K-4 (7 дней) — по `SIGNING_KEY_MANAGEMENT.md`; крипто — `minisign-verify =0.3.0`.
 
 ## Обоснование
 Полный контроль правил доверия при минимуме зависимостей; формат Tauri позволяет использовать штатный `tauri signer`.
