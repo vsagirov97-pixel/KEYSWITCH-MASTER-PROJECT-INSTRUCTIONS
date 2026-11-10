@@ -96,12 +96,36 @@ Hotkey → Gate (пауза, исключения, SelfTarget, SelfElevated, п�
 - `%LOCALAPPDATA%\KeySwitch\` SQLite (rusqlite bundled), `secure_delete`, журнал `diag_log` — только коды, время, имя exe, способ, длительность; без заголовков окон, URL и длины текста.
 - Panic hook без payload; исключение из Windows Error Reporting (выполняет основной процесс/установщик) и `WER_FAULT_REPORTING_FLAG_NOHEAP`; crash-тест в CI.
 
-## 8. macOS (будущее)
-`ks-platform-mac` (AXUIElement, TIS, CGEvent, NSPasteboard); песочница — тот же Wasmtime + App Sandbox. Ядро, движок и UI не меняются (AV2 §8.4).
+## 8. macOS — обязательная платформа (V7, D-24)
+macOS — полноценная платформа с собственными CI-раннерами, испытаниями, gates 8/16 и планом выпуска (ADR-0008). Ядро (`ks-core`), движок (`ks-engine`), `ks-types`, UI и протокол песочницы общие; ОС-специфика — только в адаптере `ks-platform-mac` за трейтами `ks-platform`.
+
+| Компонент адаптера (V7 §2) | Назначение | API (уточняет `MACOS_PLATFORM_MAP.md`) |
+|---|---|---|
+| Accessibility | фокус, роль поля, выделение, чтение/запись, признак пароля (`AXSecureTextField`) | AXUIElement |
+| NSPasteboard | контракт буфера (§4.1): `changeCount`, транзиентные/скрытые типы nspasteboard.org как аналог D-13 | AppKit |
+| Input Sources | текущая раскладка (tie-breaker), переключение (глобально на macOS) | TIS (`TISCopyCurrentKeyboardInputSource`, `TISSelectInputSource`) |
+| Menu Bar | значок статуса вместо трея | `NSStatusItem` (через Tauri `tray-icon`) |
+| Login Items | автозапуск | `SMAppService` |
+| Permission Management | запрос и проверка разрешений Accessibility/Input Monitoring, понятные отказы | TCC (`AXIsProcessTrusted…`) |
+| Ввод и хоткеи | Unicode-ввод, модификаторы; хоткеи без event tap (аналог D-14) | CGEvent, Carbon `RegisterEventHotKey` |
+| Окно выбора | неактивируемая панель (ADR-0007) | `NSPanel` |
+| Песочница | тот же Wasmtime в отдельном helper-процессе с App Sandbox | entitlements |
+| Обновления | `.app.tar.gz`, проверка подписи кода, без запроса пароля администратора (§11) | Security framework |
+
+Все соответствия API — [WR]/гипотезы до исследования macOS Platform Lead и CI на macOS-раннерах. Разрешение Accessibility привязано к подписи кода → для обновлений на macOS нужен Developer ID (LEVEL 3).
 
 ## 9. Что должно быть доказано спайками
 - **S-2:** 18 сценариев FR §8 + 9 пунктов review-arch §4 (гонки буфера, сторонний слушатель, зависший владелец, порог и Undo SendInput, окно выбора без активации, пароли, `<input>` vs contenteditable, crash/WER).
 - **S-3:** 9 пунктов review-arch §4 (stdlib из памяти и Wizer, матрица Cranelift/Pulley × LPAC × ACG, импорты, H-01…H-40, дедлайн, протокол-fuzz, дампы, воспроизводимая сборка wasm, политика Tier 2).
 
-## 10. Принятые исправления к AV2/FR/DEP
-Внести 13 исправлений из `review-arch-on-security.md` §2 (stdlib из памяти, лимиты протокола, `UserText` без `Clone`, «нет сигнала → не восстанавливать», белый список буфера, `allows_paste=false` для неизвестных, окно `WS_EX_NOACTIVATE`, `SelfElevated`, профиль песочницы, `granted_for`, `include_bytes!`, новые риски, гостевые crate вне workspace). Исполнитель — AGENT 03, задача BL-ARCH-01.
+## 10. Принятые исправления к AV2/FR/DEP — **выполнено** (BL-ARCH-01, 2026-11-10)
+Внесены 13 исправлений из `review-arch-on-security.md` §2 (stdlib из памяти, лимиты протокола, `UserText` без `Clone`, «нет сигнала → не восстанавливать», белый список буфера, `allows_paste=false` для неизвестных, окно `WS_EX_NOACTIVATE`, `SelfElevated`, профиль песочницы, `granted_for`, `include_bytes!`, новые риски, гостевые crate вне workspace). Исполнитель — AGENT 03, задача BL-ARCH-01. В каждом из трёх документов добавлена пометка «Редакция 2026-11-10 (BL-ARCH-01)»; проверка CISO — по G4-C1.
+
+## 11. Обновления (V7 §3, D-25)
+Единственный сетевой канал runtime (уточняет принцип 4 по D-25). Проект — `docs/UPDATE_SECURITY_ARCHITECTURE.md` (статус **Proposed**, нужны CISO и CLO, GATE 10; ADR-0009, ADR-0011); выпуск — `UPDATE_RELEASE_CHECKLIST.md`; сбои — `UPDATE_FAILURE_RECOVERY.md`.
+- Компоненты: `ks-update-core` (без I/O: проверка метаданных, подписей, версий) · `ks-updater` (отдельный exe, HTTP-стек ОС, AppContainer `internetClient` / App Sandbox `network.client`, без доступа к тексту) · update manager в `keyswitch` (расписание, безопасный момент, установка) · трейт `UpdateInstaller` в `ks-platform`.
+- Доверие: TUF-lite — `root` (офлайн, 2 из 3), `release`, `timestamp` (7 дней), `policy`; артефакты — minisign в формате Tauri с версией в доверенном комментарии; HTTPS обязателен, но не основа доверия.
+- Правила: только вперёд по версии; `min_safe_version` не убывает; отозванные версии не ставятся; платформа/arch/ОС проверяются; установка — только в безопасный момент (нет операции/макроса); Windows — NSIS `currentUser`, macOS — без повышения прав.
+- Каналы STABLE (поэтапно) и EMERGENCY SECURITY (High/Critical без обычного подтверждения); подписанные emergency-политики только выключают функции; корпоративные политики (HKLM Policies / MDM) не обходятся.
+- Запрос: GET статических файлов, без версии, ОС и идентификаторов; телеметрии нет.
+- `tauri-plugin-updater` не используется (SR-62 без изменений).
