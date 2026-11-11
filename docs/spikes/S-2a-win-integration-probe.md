@@ -1,6 +1,6 @@
 # Спайк S-2a — Windows integration probe (Win32-фикстура)
 
-Ветка: `spike/win-integration-probe` · Исполнитель: AGENT 05 (Windows Integration) · Руководитель: AGENT 20 · Дата: 2026-11-10.
+Ветка: `spike/win-integration-probe` · Исполнитель: AGENT 05 (Windows Integration) · Руководитель: AGENT 20 · Дата: 2026-11-10, подтверждение 2026-11-11.
 Статус: **код и CI готовы, результаты получены на `windows-latest`; спайк не закрыт** (S-2 целиком требует S-2b, см. ниже). Ничего не слито в `main`.
 
 ## 1. Что сделано
@@ -12,6 +12,8 @@
 
 ## 2. Результаты на windows-latest
 Прогон: run 42829765734, коммит `0f47a57`, job https://github.com/vsagirov97-pixel/keyswitch-master-project-instructions/actions/runs/42829765734/job/129876445583 — success.
+Повторный прогон после слияния `origin/main` (подтверждение воспроизводимости): run 42980865753, коммит `9fdf510`, job https://github.com/vsagirov97-pixel/keyswitch-master-project-instructions/actions/runs/42980865753/job/130390708655 — success; все статусы совпали (12 PASS, 2 OBSERVED, 0 SKIP, 0 FAIL). Отличия только в таймингах: c2 — 163 мс / **≈1225 символов/с** (send_call 3 мс), c1 суррогатная пара — 82 мс, a1 focus 3–26 мс. Числа таймингов — единичные замеры на общем раннере, не бенчмарк.
+
 Окружение раннера: сессия 2 (интерактивная), `OpenInputDesktop` успешен, фикстура получила foreground (`direct`; в e1 — через `AttachThreadInput`).
 
 | Тест | Результат | Факты |
@@ -38,9 +40,9 @@
 2. **XR-03 подтверждён: W1 (`EM_REPLACESEL`) для RichEdit небезопасен** — строка, начинающаяся с `{\rtf`, интерпретируется как RTF. Предложение: W1 только для класса `Edit` (как в WINDOWS_PLATFORM_MAP); для RichEdit — W3 или отказ, либо (после отдельного решения) `EM_SETTEXTEX` с `ST_UNICODE`/plain-text режимом — не проверено.
 3. Для пароля TextPattern отсутствует вовсе — дополнительный признак, но решение принимается по IsPassword/`ES_PASSWORD` (fail closed).
 4. Сравнение «всё ли выделено» в RichEdit должно учитывать финальную метку абзаца (±1).
-5. W3: ≈1150 симв./с на CI — порог профиля 200 символов (≈0,2 с) реалистичен; Undo в Edit откатывает весь набор одним шагом (для других приложений не проверено).
+5. W3: ≈1150–1225 симв./с на CI (два прогона) — порог профиля 200 символов (≈0,2 с) реалистичен; Undo в Edit откатывает весь набор одним шагом (для других приложений не проверено).
 
-## 4. Автоматически проверено (CI windows-latest, run 42829765734)
+## 4. Автоматически проверено (CI windows-latest, runs 42829765734 и 42980865753)
 Сценарии a1–a4, b1, c1–c3, d1–d2, e1, f1 — PASS; b2, f2 — зафиксированы факты (OBSERVED). Только на собственной фикстуре в процессе теста, Windows Server-образ GitHub (`windows-latest`), учётная запись администратора раннера.
 Локально (Linux): `cargo clippy -p ks-winprobe --target x86_64-pc-windows-msvc --all-targets -- -D warnings` — чисто; `scripts/check.sh` — все PASS.
 
