@@ -112,42 +112,73 @@ mod mac {
         via_system_wide: bool,
         frontmost: bool,
         wait_ms: u128,
+        /// Last system-wide observation if it never resolved to the fixture:
+        /// `ax<code>` (AX error), `pid-other`, `pid-err<code>`. Metadata only.
+        sys_last: String,
+        /// System-wide `AXFocusedApplication`: `fixture`, `other`, `pid-err<code>`, `ax<code>`.
+        sys_app: String,
     }
 
-    /// Finds the fixture's focused element; prefers the system-wide path.
+    const FOCUS_WAIT: Duration = Duration::from_secs(6);
+
+    fn sys_focused_app(sys: &Element, pid: i32) -> String {
+        match sys.element_attr(attr::FOCUSED_APPLICATION) {
+            Ok(a) => match a.pid() {
+                Ok(p) if p == pid => "fixture".into(),
+                Ok(_) => "other".into(),
+                Err(e) => format!("pid-err{e}"),
+            },
+            Err(e) => format!("ax{e}"),
+        }
+    }
+
+    /// Finds the fixture's focused element; prefers the system-wide path and falls back to
+    /// the application element (`AXUIElementCreateApplication(pid)` -> `AXFocusedUIElement`).
     fn focus_of(fx: &Fixture) -> Result<Focus, String> {
         let app = Element::application(fx.pid);
         app.set_timeout(AX_TIMEOUT_S);
         let sys = Element::system_wide();
         sys.set_timeout(AX_TIMEOUT_S);
         let t0 = Instant::now();
-        let mut raised = false;
-        while t0.elapsed() < Duration::from_secs(10) {
-            if !raised {
-                // Ask AX to make the fixture frontmost (needed for HID-delivered events).
+        let mut last_raise: Option<Instant> = None;
+        let mut sys_last = String::from("none");
+        while t0.elapsed() < FOCUS_WAIT {
+            // Ask AX to make the fixture frontmost (needed for HID-delivered events). Repeated,
+            // because a request made while the app is still finishing launch may be ignored.
+            if last_raise.is_none_or(|t| t.elapsed() > Duration::from_millis(500)) {
                 app.set_bool(attr::FRONTMOST, true);
-                raised = true;
+                last_raise = Some(Instant::now());
             }
-            if let Ok(el) = sys.element_attr(attr::FOCUSED_UI_ELEMENT)
-                && el.pid() == Ok(fx.pid)
-            {
-                let frontmost = app.bool_attr(attr::FRONTMOST).unwrap_or(false);
-                return Ok(Focus {
-                    el,
-                    via_system_wide: true,
-                    frontmost,
-                    wait_ms: t0.elapsed().as_millis(),
-                });
+            match sys.element_attr(attr::FOCUSED_UI_ELEMENT) {
+                Ok(el) => match el.pid() {
+                    Ok(p) if p == fx.pid => {
+                        let frontmost = app.bool_attr(attr::FRONTMOST).unwrap_or(false);
+                        return Ok(Focus {
+                            el,
+                            via_system_wide: true,
+                            frontmost,
+                            wait_ms: t0.elapsed().as_millis(),
+                            sys_last: "fixture".into(),
+                            sys_app: "fixture".into(),
+                        });
+                    }
+                    Ok(_) => sys_last = "pid-other".into(),
+                    Err(e) => sys_last = format!("pid-err{e}"),
+                },
+                Err(e) => sys_last = format!("ax{e}"),
             }
             sleep(Duration::from_millis(100));
         }
         let frontmost = app.bool_attr(attr::FRONTMOST).unwrap_or(false);
+        let sys_app = sys_focused_app(&sys, fx.pid);
         app.element_attr(attr::FOCUSED_UI_ELEMENT)
             .map(|el| Focus {
                 el,
                 via_system_wide: false,
                 frontmost,
                 wait_ms: t0.elapsed().as_millis(),
+                sys_last,
+                sys_app,
             })
             .map_err(|e| format!("no focused element (AX {e})"))
     }
@@ -271,10 +302,17 @@ mod mac {
                             carbon::secure_event_input_enabled(),
                         );
                     }
+                    if !f.via_system_wide {
+                        // Diagnostics for M-2b: which focus path the product can rely on.
+                        o.meta("sys_focus_last", &f.sys_last)
+                            .meta("sys_focused_app", &f.sys_app);
+                    }
+                    // Pass criterion: role/subrole/class of the fixture's focused element.
+                    // The path (system-wide vs application element) is a recorded fact, not a
+                    // pass condition: the product can resolve the frontmost pid first and query
+                    // the application element directly (M-2b decides).
                     if role != want_role || class != want_class {
                         o.fail("role/class mismatch");
-                    } else if !f.via_system_wide {
-                        o.fail("system-wide AXFocusedUIElement did not resolve to the fixture");
                     }
                 }
                 Err(e) => {
@@ -631,7 +669,9 @@ mod mac {
                 }
             }
             Err(e) => {
-                o.meta("snapshot_error", &format!("{e:?}"));
+                // Type identifiers of our own synthetic seed (metadata, not content).
+                o.meta("snapshot_error", &format!("{e:?}"))
+                    .meta("types_seen", &pb.types().join("|"));
                 o.fail("whitelisted snapshot refused");
             }
         }
@@ -642,7 +682,12 @@ mod mac {
         o.meta("case", "no-restore-when-changed");
         pb.clear();
         pb.set_string(pasteboard::T_UTF8, "synthetic original clipboard");
-        if let Ok(snap) = pb.snapshot() {
+        let snap = pb.snapshot();
+        if let Err(e) = &snap {
+            o.meta("snapshot_error", &format!("{e:?}"))
+                .meta("types_seen", &pb.types().join("|"));
+        }
+        if let Ok(snap) = snap {
             let ours = pb.write_ours(syn::M1_REPLACEMENT);
             pb.clear(); // simulated third-party copy
             pb.set_string(pasteboard::T_UTF8, "synthetic third-party copy");
@@ -666,7 +711,13 @@ mod mac {
         pb.set_string(pasteboard::T_UTF8, "synthetic");
         pb.set_data("com.example.keyswitch.private", b"\x00\x01synthetic");
         let r = pb.snapshot();
-        let refused = matches!(r, Err(SnapshotError::UnsupportedType));
+        let refused = matches!(
+            &r,
+            Err(SnapshotError::UnsupportedType(t)) if t == "com.example.keyswitch.private"
+        );
+        if let Err(e) = &r {
+            o.meta("snapshot_error", &format!("{e:?}"));
+        }
         o.flag("snapshot_refused", refused);
         if !refused {
             o.fail("private type was not refused");
@@ -692,34 +743,14 @@ mod mac {
         let ids: Vec<String> = enabled.iter().map(|s| s.id()).collect();
         o.meta("enabled_ids", &ids.join(","));
 
-        // Target: another enabled source, else try to enable the Russian layout (CI VM only).
-        let mut enabled_by_us = None;
-        let target = match enabled.into_iter().find(|s| s.id() != cur_id) {
-            Some(t) => Some(t),
-            None => {
-                let ru = carbon::input_sources(true)
-                    .into_iter()
-                    .find(|s| s.id() == "com.apple.keylayout.Russian");
-                match ru {
-                    Some(ru) => {
-                        let st = ru.enable();
-                        o.num("enable_russian_status", st);
-                        if st == 0 {
-                            enabled_by_us = Some(ru.id());
-                            Some(ru)
-                        } else {
-                            None
-                        }
-                    }
-                    None => {
-                        o.meta("russian_installed", "no");
-                        None
-                    }
-                }
-            }
-        };
-        let Some(target) = target else {
-            o.skip("no second selectable keyboard source available on this runner");
+        // Target: another already-enabled source only. The probe never enables/disables input
+        // sources (that would change the user's system settings); with one source -> SKIP.
+        let ru_installed = carbon::input_sources(true)
+            .iter()
+            .any(|s| s.id() == "com.apple.keylayout.Russian");
+        o.flag("russian_layout_installed", ru_installed);
+        let Some(target) = enabled.into_iter().find(|s| s.id() != cur_id) else {
+            o.skip("only one enabled selectable keyboard source; switching not tested (probe does not enable sources)");
             return o;
         };
         let target_id = target.id();
@@ -739,9 +770,6 @@ mod mac {
         sleep(Duration::from_millis(200));
         let restored = carbon::current_keyboard_source().map(|s| s.id()) == Some(cur_id.clone());
         o.num("restore_status", st_back).flag("restored", restored);
-        if enabled_by_us.is_some() {
-            o.num("disable_status", target.disable());
-        }
         if st != 0 || !switched || !restored {
             o.fail("TIS switch/restore not confirmed");
         }

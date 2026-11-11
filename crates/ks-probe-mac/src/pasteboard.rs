@@ -17,6 +17,22 @@ pub const T_CONCEALED: &str = "org.nspasteboard.ConcealedType";
 /// Types we are willing to snapshot and restore. Anything else => refuse M2.
 const WHITELIST: [&str; 3] = [T_UTF8, T_HTML, T_RTF];
 
+/// Legacy (pre-UTI) aliases that `-[NSPasteboard types]` may report on its own for the
+/// whitelisted UTIs [hypothesis: CI run 42830218515 refused a utf8+html-only seed with
+/// UnsupportedType; the legacy names exist as deprecated constants in `NSPasteboard.h`;
+/// the probe now prints the offending type so the next run confirms or refutes this].
+/// If the system derives them from the UTI, they reappear on restore, so they are
+/// neither snapshotted nor treated as foreign.
+const DERIVED_ALIASES: [&str; 3] = [
+    "NSStringPboardType",
+    "Apple HTML pasteboard type",
+    "NeXT Rich Text Format v1.0 pasteboard type",
+];
+
+fn is_derived(t: &str) -> bool {
+    DERIVED_ALIASES.contains(&t)
+}
+
 pub struct Board(Retained<NSPasteboard>);
 
 /// Why a snapshot was refused.
@@ -25,7 +41,8 @@ pub enum SnapshotError {
     /// More than one pasteboard item (spike limitation; M-2b).
     MultipleItems(usize),
     /// A type outside the whitelist is present (files, images, private types).
-    UnsupportedType,
+    /// Carries the type identifier (metadata, never content) for diagnostics.
+    UnsupportedType(String),
 }
 
 /// Copy of whitelisted pasteboard data. Bytes are never printed.
@@ -97,8 +114,11 @@ impl Board {
         }
         let mut entries = Vec::new();
         for t in self.types() {
+            if is_derived(&t) {
+                continue;
+            }
             if !WHITELIST.contains(&t.as_str()) {
-                return Err(SnapshotError::UnsupportedType);
+                return Err(SnapshotError::UnsupportedType(t));
             }
             if let Some(d) = self.data(&t) {
                 entries.push((t, d));
@@ -128,9 +148,14 @@ impl Board {
         RestoreOutcome::Restored
     }
 
-    /// True if current contents equal the snapshot byte-for-byte (same type set).
+    /// True if current contents equal the snapshot byte-for-byte (same type set,
+    /// ignoring system-derived legacy aliases).
     pub fn equals(&self, snap: &Snapshot) -> bool {
-        let mut now = self.types();
+        let mut now: Vec<String> = self
+            .types()
+            .into_iter()
+            .filter(|t| !is_derived(t))
+            .collect();
         now.sort();
         let mut then: Vec<&str> = snap.entries.iter().map(|(t, _)| t.as_str()).collect();
         then.sort_unstable();

@@ -64,8 +64,6 @@ unsafe extern "C" {
     ) -> Option<NonNull<CFArray<CFType>>>;
     fn TISGetInputSourceProperty(source: &CFType, key: &CFString) -> *const CFType;
     fn TISSelectInputSource(source: &CFType) -> OSStatus;
-    fn TISEnableInputSource(source: &CFType) -> OSStatus;
-    fn TISDisableInputSource(source: &CFType) -> OSStatus;
 
     static kTISPropertyInputSourceID: &'static CFString;
     static kTISPropertyInputSourceCategory: &'static CFString;
@@ -209,16 +207,6 @@ impl InputSource {
     pub fn select(&self) -> OSStatus {
         // SAFETY: valid input source reference.
         unsafe { TISSelectInputSource(&self.0) }
-    }
-
-    pub fn enable(&self) -> OSStatus {
-        // SAFETY: valid input source reference.
-        unsafe { TISEnableInputSource(&self.0) }
-    }
-
-    pub fn disable(&self) -> OSStatus {
-        // SAFETY: valid input source reference.
-        unsafe { TISDisableInputSource(&self.0) }
     }
 }
 
