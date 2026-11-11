@@ -27,3 +27,10 @@ ks-sandbox-proto = { path = "../ks-sandbox-proto" }
 # pooling-allocator, async, wat, parallel-compilation, profiling, coredump, debug*, addr2line,
 # backtrace, demangle, winch, stack-switching, wit-parser, compile-time-builtins.
 wasmtime = { version = "=48.0.8", default-features = false, features = ["runtime", "std", "cranelift"] }
+
+[dev-dependencies]
+# Test-only WAT -> wasm for the hostile-module suite. Chosen over wasmtime's `wat` feature so the
+# text parser never ships in the sandbox binary (smaller attack surface and size). 1.254.2
+# (2026-10-02, Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) is the exact version
+# wasmtime 48.0.8 itself pins, so it shares wasm-encoder/wasmparser 0.254.2 (only `wast` is new).
+wat = { version = "=1.254.2", default-features = false }
