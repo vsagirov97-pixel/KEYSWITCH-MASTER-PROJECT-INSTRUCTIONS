@@ -7,6 +7,6 @@ the copyright holder. Public visibility of this repository does not grant
 any license.
 
 Third-party components included in or distributed with this software are
-licensed under their own terms; see THIRD_PARTY.md and docs/LICENSE_REGISTER.md.
+licensed under their own terms; see THIRD_PARTY.md and docs/SOFTWARE_LICENSE_REGISTER.md.
 Language-model data in crates/ks-core/data/ is licensed under CC-BY-SA-4.0;
 see crates/ks-core/data/README.md.
