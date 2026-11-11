@@ -15,6 +15,8 @@ skip() { RESULTS+=("SKIP  $1 ($2)"); }
 run "rustfmt"                cargo fmt --all --check
 run "clippy ks-core"         cargo clippy -p ks-core --all-targets -- -D warnings
 run "tests ks-core"          cargo test -p ks-core
+run "clippy sandbox"         cargo clippy -p ks-sandbox-proto -p ks-sandbox --all-targets -- -D warnings
+run "tests sandbox (hostile)" cargo test -p ks-sandbox-proto -p ks-sandbox
 if [ -d app/node_modules ]; then
   run "frontend typecheck"   npm --prefix app run typecheck
   run "frontend build"       npm --prefix app run build
@@ -27,6 +29,14 @@ if [ "$QUICK" != "--quick" ]; then
   else
     skip "windows cross-check" "rustup target add x86_64-pc-windows-msvc; build frontend first"
   fi
+  if rustup target list --installed 2>/dev/null | grep -q x86_64-pc-windows-msvc; then
+    run "clippy sandbox (windows target, check only)" cargo clippy -p ks-sandbox-proto -p ks-sandbox --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+  else
+    skip "sandbox windows cross-check" "rustup target add x86_64-pc-windows-msvc"
+  fi
+  # wasmtime's build script compiles a C helper; cross-checking macOS needs the macOS SDK.
+  # On macOS the native "clippy sandbox" above already covers it.
+  [ "$(uname -s)" != "Darwin" ] && skip "sandbox macOS cross-check" "needs macOS SDK; native clippy runs in CI job sandbox (macos-15)"
   if command -v cargo-deny >/dev/null; then run "cargo deny" cargo deny --all-features check
   else skip "cargo deny" "cargo install cargo-deny --version 0.19.9 --locked"; fi
   [ -d app/node_modules ] && run "npm audit" npm --prefix app audit --audit-level=high

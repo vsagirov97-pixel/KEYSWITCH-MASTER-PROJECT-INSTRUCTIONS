@@ -36,8 +36,11 @@ use wasmtime::{
 /// * `ks.emit(ptr: i32, len: i32)` - hand the single result frame (guest -> host, <= 64 KiB).
 /// * `ks.request_len() -> i32` - size of the host -> guest request frame.
 /// * `ks.request_read(ptr: i32, cap: i32) -> i32` - copy the request frame into guest memory.
-pub const ALLOWED_IMPORTS: [(&str, &str); 3] =
-    [("ks", "emit"), ("ks", "request_len"), ("ks", "request_read")];
+pub const ALLOWED_IMPORTS: [(&str, &str); 3] = [
+    ("ks", "emit"),
+    ("ks", "request_len"),
+    ("ks", "request_read"),
+];
 
 /// Exported function the host calls (`() -> ()`).
 pub const ENTRY_EXPORT: &str = "run";
@@ -333,7 +336,11 @@ impl Sandbox {
             .and_then(|l| l.func_wrap("ks", "request_len", host_request_len))
             .and_then(|l| l.func_wrap("ks", "request_read", host_request_read))
             .map_err(|_| SandboxError::EngineConfig)?;
-        Ok(Self { engine, linker, config })
+        Ok(Self {
+            engine,
+            linker,
+            config,
+        })
     }
 
     /// Effective limits.
@@ -453,7 +460,10 @@ impl Watchdog {
                 }
             })
             .ok()?;
-        Some(Self { cancel: Some(tx), handle: Some(handle) })
+        Some(Self {
+            cancel: Some(tx),
+            handle: Some(handle),
+        })
     }
 }
 
@@ -506,7 +516,11 @@ fn host_request_len(caller: Caller<'_, HostState>) -> i32 {
     i32::try_from(caller.data().request.len()).unwrap_or(i32::MAX)
 }
 
-fn host_request_read(mut caller: Caller<'_, HostState>, ptr: i32, cap: i32) -> wasmtime::Result<i32> {
+fn host_request_read(
+    mut caller: Caller<'_, HostState>,
+    ptr: i32,
+    cap: i32,
+) -> wasmtime::Result<i32> {
     let len = caller.data().request.len();
     let cap = usize::try_from(cap.cast_unsigned()).map_err(|_| Violation::OutOfBounds)?;
     if cap < len {

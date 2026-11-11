@@ -12,7 +12,9 @@ use std::io::{Read, Write};
 use std::process::ExitCode;
 
 use ks_sandbox::{Outcome, Sandbox, SandboxConfig};
-use ks_sandbox_proto::{GuestMessage, HostRequest, MAX_HOST_FRAME_BYTES, PROTOCOL_VERSION, framing};
+use ks_sandbox_proto::{
+    GuestMessage, HostRequest, MAX_HOST_FRAME_BYTES, PROTOCOL_VERSION, framing,
+};
 
 /// Upper bound for a guest module received over stdin.
 const MAX_MODULE_BYTES: usize = 64 * 1024 * 1024;
@@ -59,7 +61,11 @@ fn main() -> ExitCode {
             return exit(19);
         };
         let mut stdout = std::io::stdout().lock();
-        if stdout.write_all(&out).and_then(|()| stdout.flush()).is_err() {
+        if stdout
+            .write_all(&out)
+            .and_then(|()| stdout.flush())
+            .is_err()
+        {
             return exit(19);
         }
     }

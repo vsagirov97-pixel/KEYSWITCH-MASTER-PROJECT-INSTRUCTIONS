@@ -396,7 +396,9 @@ pub fn parse_guest_frame(
 /// Validates an action against the output limits and slot permissions (SR-47, SR-49).
 pub fn validate_action(action: &Action, permissions: SlotPermissions) -> Result<(), ProtoError> {
     match action {
-        Action::Insert { text } | Action::Replace { text } => validate_text(text.as_str(), permissions),
+        Action::Insert { text } | Action::Replace { text } => {
+            validate_text(text.as_str(), permissions)
+        }
         Action::Keys { keys } => {
             if keys.is_empty() {
                 return Err(ProtoError::NoKeys);

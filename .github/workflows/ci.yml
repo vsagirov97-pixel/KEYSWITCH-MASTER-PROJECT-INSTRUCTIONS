@@ -73,6 +73,34 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  sandbox:
+    # Spike S-3a: Wasmtime layer of the macro sandbox (hostile WAT suite, protocol limits,
+    # separate-process smoke test). OS isolation (LPAC/Job, App Sandbox) is S-3b/S-3c.
+    name: Sandbox (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo clippy -p ks-sandbox-proto -p ks-sandbox --all-targets -- -D warnings
+      - name: Protocol tests (incl. 100 000 deterministic random frames)
+        run: cargo test -p ks-sandbox-proto
+      - name: Protocol random frames, 1 000 000 (SR-46)
+        run: cargo test -p ks-sandbox-proto random_inputs
+        env:
+          KS_PROTO_FUZZ_ITERS: "1000000"
+      - name: Hostile Wasm suite + process smoke test
+        run: cargo test -p ks-sandbox
+      - name: Timing numbers (content-free; durations and outcome codes only)
+        run: cargo test -p ks-sandbox --test hostile timing_numbers_for_report -- --nocapture
+      - name: Timing numbers, release build
+        run: cargo test --release -p ks-sandbox --test hostile timing_numbers_for_report -- --nocapture
+
   supply-chain:
     name: Supply chain
     runs-on: ubuntu-latest
