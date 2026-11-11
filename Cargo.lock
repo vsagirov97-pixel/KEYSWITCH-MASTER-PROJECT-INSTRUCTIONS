@@ -1621,6 +1621,13 @@ name = "ks-core"
 version = "0.1.0"
 
 [[package]]
+name = "ks-win-manual-probe"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "ks-winprobe"
 version = "0.1.0"
 dependencies = [

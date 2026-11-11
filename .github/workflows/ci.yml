@@ -106,6 +106,59 @@ jobs:
         shell: bash
         run: grep '"test":"[d-z]' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
 
+  windows-manual-kit:
+    # W-MAN-1: builds the owner's manual test kit (ks-win-manual-probe.exe, x64, static CRT).
+    # The exe is NOT run against the runner's desktop here; only unit tests and an argument
+    # smoke check run. The owner runs it by hand (docs/spikes/W-MAN-1-windows-manual-kit.md).
+    name: Windows manual test kit (W-MAN-1)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-C target-feature=+crt-static"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: manual-kit
+      - name: Forbidden API guard (WS-07/WS-08, kit crate)
+        shell: bash
+        run: |
+          if grep -rnE 'SetWindowsHookEx|AttachThreadInput|CreateRemoteThread|WriteProcessMemory|VirtualAllocEx|keybd_event|send_vk_chord|LoadKeyboardLayout|UnloadKeyboardLayout|ShellExecute|CreateProcess|WinHttp|URLDownload|reqwest|TcpStream|UdpSocket' crates/ks-win-manual-probe/src; then
+            echo "::error::forbidden API in ks-win-manual-probe"; exit 1
+          fi
+      - run: cargo clippy -p ks-win-manual-probe --all-targets --locked -- -D warnings
+      - run: cargo test -p ks-win-manual-probe --locked
+      - run: cargo build -p ks-win-manual-probe --release --locked
+      - name: Smoke (refuses without --i-understand)
+        shell: bash
+        run: |
+          set +e
+          ./target/release/ks-win-manual-probe.exe fixture > smoke.txt; code=$?
+          cat smoke.txt
+          test "$code" -eq 2 || { echo "::error::expected exit code 2, got $code"; exit 1; }
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force kit | Out-Null
+          Copy-Item target/release/ks-win-manual-probe.exe kit/
+          $h = (Get-FileHash kit/ks-win-manual-probe.exe -Algorithm SHA256).Hash
+          "$h  ks-win-manual-probe.exe" | Out-File kit/SHA256.txt -Encoding ascii
+          "## W-MAN-1 kit`n`nSHA256 ks-win-manual-probe.exe: ``$h``" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          # Static CRT check: the exe must not import the VC++ runtime DLLs.
+          $bytes = [System.IO.File]::ReadAllBytes("kit/ks-win-manual-probe.exe")
+          $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
+          if ($ascii -match 'VCRUNTIME140\.dll|vcruntime140\.dll') { Write-Error "dynamic CRT import found"; exit 1 }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ks-win-manual-probe
+          path: kit/
+          if-no-files-found: error
+          retention-days: 14
+
   supply-chain:
     name: Supply chain
     runs-on: ubuntu-latest
