@@ -21,6 +21,13 @@ print_stdout = "deny"
 print_stderr = "deny"
 undocumented_unsafe_blocks = "deny"
 
+[dependencies]
+ks-engine = { path = "../ks-engine" }
+ks-platform-win = { path = "../ks-platform-win" }
+
+[dev-dependencies]
+ks-core = { path = "../ks-core" }
+
 # `windows` 0.62.2 is already in Cargo.lock (pulled in by Tauri), so no new crate enters the
 # graph; only the feature set below is new.
 [target.'cfg(windows)'.dependencies]

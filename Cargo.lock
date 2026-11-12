@@ -1621,9 +1621,28 @@ name = "ks-core"
 version = "0.1.0"
 
 [[package]]
+name = "ks-engine"
+version = "0.1.0"
+dependencies = [
+ "ks-core",
+]
+
+[[package]]
+name = "ks-platform-win"
+version = "0.1.0"
+dependencies = [
+ "ks-core",
+ "ks-engine",
+ "windows",
+]
+
+[[package]]
 name = "ks-winprobe"
 version = "0.1.0"
 dependencies = [
+ "ks-core",
+ "ks-engine",
+ "ks-platform-win",
  "windows",
 ]
 

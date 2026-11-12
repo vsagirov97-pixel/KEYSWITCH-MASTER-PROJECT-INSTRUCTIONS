@@ -18,29 +18,29 @@
 //!
 //! On non-Windows targets the crate compiles to (almost) nothing.
 
-pub mod policy;
 pub mod report;
+pub use ks_platform_win::policy;
 
 #[cfg(windows)]
 pub mod child;
 #[cfg(windows)]
 pub mod clipboard;
 #[cfg(windows)]
-pub mod desktop;
+pub use ks_platform_win::desktop;
 #[cfg(windows)]
 pub mod fixture;
 #[cfg(windows)]
-pub mod gate;
+pub use ks_platform_win::gate;
 #[cfg(windows)]
-pub mod hotkey;
+pub use ks_platform_win::hotkey;
 #[cfg(windows)]
 pub mod input;
 #[cfg(windows)]
 pub mod integrity;
 #[cfg(windows)]
-pub mod layout;
+pub use ks_platform_win::layout;
 #[cfg(windows)]
-pub mod uia;
+pub use ks_platform_win::uia;
 
 use std::sync::{Mutex, MutexGuard};
 

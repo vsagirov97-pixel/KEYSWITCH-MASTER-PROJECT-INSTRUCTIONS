@@ -20,7 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, GetWindowThreadProcessId, RealGetWindowClassW,
 };
 
-use crate::fixture::Hwnd;
+use crate::Hwnd;
 use crate::policy;
 
 /// Identity of the write target.
@@ -207,6 +207,12 @@ pub fn class_names(h: Hwnd) -> (String, String) {
         )
     };
     (class_string(&a, na), class_string(&b, nb))
+}
+
+/// Id of the thread that owns window `h` (0 if the handle is invalid).
+pub fn window_thread(h: Hwnd) -> u32 {
+    // SAFETY: trivial query; the process id out-parameter is optional.
+    unsafe { GetWindowThreadProcessId(h.raw(), None) }
 }
 
 /// `GWL_STYLE` of `h` (works across processes).

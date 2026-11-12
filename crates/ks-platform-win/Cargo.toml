@@ -1,0 +1,46 @@
+[package]
+name = "ks-platform-win"
+description = "KeySwitch Windows integration: UI Automation, W1/W3 writers, gates, hotkey, layouts, autostart"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# The only product crate that may contain `unsafe` (CLAUDE.md, threat model rule 2): it does
+# not inherit `[workspace.lints]` (which forbids `unsafe`). Every `unsafe` block must carry a
+# `// SAFETY:` comment (enforced by `clippy::undocumented_unsafe_blocks`). The remaining
+# workspace lints are repeated verbatim.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+undocumented_unsafe_blocks = "deny"
+
+[dependencies]
+ks-core = { path = "../ks-core" }
+ks-engine = { path = "../ks-engine" }
+
+# `windows` 0.62.2 is already in Cargo.lock (pulled in by Tauri): no new crate enters the
+# graph, only the feature set below.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "=0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_ErrorReporting",
+  "Win32_System_Ole",
+  "Win32_System_Registry",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_Threading",
+  "Win32_UI_Accessibility",
+  "Win32_UI_Controls",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
+] }

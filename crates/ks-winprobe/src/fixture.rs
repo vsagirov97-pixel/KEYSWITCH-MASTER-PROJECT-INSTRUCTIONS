@@ -38,33 +38,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 
-/// Window handle that can cross threads. Plain `HWND` holds a raw pointer and is `!Send`;
-/// an HWND is only a system-wide identifier, so passing its value between threads is fine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Hwnd(isize);
-
-impl Hwnd {
-    /// Wraps a raw handle.
-    pub fn from_raw(h: HWND) -> Self {
-        Self(h.0 as isize)
-    }
-    /// The raw handle for Win32 calls.
-    pub fn raw(self) -> HWND {
-        HWND(self.0 as *mut c_void)
-    }
-    /// Handle value as an integer (to pass it between processes; not a pointer).
-    pub fn as_isize(self) -> isize {
-        self.0
-    }
-    /// Handle from an integer value received from another process.
-    pub fn from_isize(v: isize) -> Self {
-        Self(v)
-    }
-    /// `true` for the NULL handle.
-    pub fn is_null(self) -> bool {
-        self.0 == 0
-    }
-}
+pub use ks_platform_win::Hwnd;
 
 /// Handles of the fixture controls.
 #[derive(Clone, Copy, Debug)]
@@ -265,7 +239,7 @@ pub fn request_foreground(main: Hwnd) -> Foreground {
 /// Asks the fixture `main` to focus its child `control` (or itself); `true` on success.
 pub fn request_focus(main: Hwnd, control: Hwnd) -> bool {
     // SAFETY: private message; wparam is a window handle value, not dereferenced by us.
-    unsafe { send(main, MSG_FOCUS, control.0 as usize, 0) == Some(1) }
+    unsafe { send(main, MSG_FOCUS, control.as_isize() as usize, 0) == Some(1) }
 }
 
 /// `true` if `main` is the foreground window.

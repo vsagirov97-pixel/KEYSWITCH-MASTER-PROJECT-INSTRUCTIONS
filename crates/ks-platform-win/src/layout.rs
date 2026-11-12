@@ -8,7 +8,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_INPUTLANGCHANGEREQUEST};
 use windows::core::PCWSTR;
 
-use crate::fixture::Hwnd;
+use crate::Hwnd;
 
 /// HKL as an integer (thread-safe to pass around).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

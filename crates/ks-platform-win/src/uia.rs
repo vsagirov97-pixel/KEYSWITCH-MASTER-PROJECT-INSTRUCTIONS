@@ -23,7 +23,7 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::core::Interface;
 
-use crate::fixture::Hwnd;
+use crate::Hwnd;
 
 /// Number of `GetText` calls made through this module (process-wide).
 pub static GET_TEXT_CALLS: AtomicU32 = AtomicU32::new(0);
@@ -139,6 +139,66 @@ impl Uia {
             return Ok(None);
         }
         Ok(Some(Read::Text(range_text(&sel[0], max)?)))
+    }
+
+    /// Guarded read of at most `units` characters immediately before the caret (the start of
+    /// the single selection). `Ok(None)` if there is not exactly one selection range.
+    /// Never reads the whole document.
+    pub fn read_before_caret(
+        &self,
+        el: &IUIAutomationElement,
+        units: i32,
+    ) -> Result<Option<Read>, String> {
+        if password_guard(el).is_some() {
+            return Ok(Some(Read::RefusedPassword));
+        }
+        let Some(tp) = text_pattern(el) else {
+            return Ok(Some(Read::NoTextPattern));
+        };
+        let sel = selection(&tp)?;
+        if sel.len() != 1 {
+            return Ok(None);
+        }
+        let r = before_caret_range(&sel[0], units)?;
+        Ok(Some(Read::Text(range_text(&r, units)?)))
+    }
+
+    /// Selects the last `units` characters before the caret. `Ok(false)` if there is not
+    /// exactly one selection range or no TextPattern.
+    pub fn select_before_caret(
+        &self,
+        el: &IUIAutomationElement,
+        units: i32,
+    ) -> Result<bool, String> {
+        let Some(tp) = text_pattern(el) else {
+            return Ok(false);
+        };
+        let sel = selection(&tp)?;
+        if sel.len() != 1 {
+            return Ok(false);
+        }
+        select(&before_caret_range(&sel[0], units)?)?;
+        Ok(true)
+    }
+}
+
+/// Range of at most `units` characters that ends at the start of `sel`.
+pub fn before_caret_range(
+    sel: &IUIAutomationTextRange,
+    units: i32,
+) -> Result<IUIAutomationTextRange, String> {
+    // SAFETY: method calls on live interfaces; `r` is a fresh clone we own.
+    unsafe {
+        let r = sel.Clone().map_err(|e| format!("Clone: {e}"))?;
+        r.MoveEndpointByRange(
+            TextPatternRangeEndpoint_End,
+            &r,
+            TextPatternRangeEndpoint_Start,
+        )
+        .map_err(|e| format!("MoveEndpointByRange: {e}"))?;
+        r.MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -units)
+            .map_err(|e| format!("MoveEndpointByUnit: {e}"))?;
+        Ok(r)
     }
 }
 
