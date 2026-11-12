@@ -80,6 +80,14 @@ impl<'a> WinPlatform<'a> {
         }
         Ok(t)
     }
+
+    /// The currently focused element, if it still belongs to process `pid`.
+    fn fresh_element(&self, pid: u32) -> Option<IUIAutomationElement> {
+        let element = self.uia.focused().ok()?;
+        // SAFETY: property getter on a live interface.
+        let element_pid = unsafe { element.CurrentProcessId() }.ok()?;
+        (u32::try_from(element_pid).ok() == Some(pid)).then_some(element)
+    }
 }
 
 fn text_of(read: Result<Option<Read>, String>) -> Result<Option<UserText>, Stop> {
@@ -237,7 +245,11 @@ impl Platform for WinPlatform<'_> {
             let Ok(t) = self.checked() else {
                 return false;
             };
-            if let Ok(Some(now)) = text_of(self.uia.read_before_caret(&t.element, units))
+            // A fresh element for every attempt: the element captured in `begin` may be
+            // served by a client-side proxy (classic `Edit`) that keeps the text it saw
+            // before the write.
+            if let Some(element) = self.fresh_element(t.fp.pid)
+                && let Ok(Some(now)) = text_of(self.uia.read_before_caret(&element, units))
                 && now.same_as(expected)
             {
                 return true;

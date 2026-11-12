@@ -13,8 +13,10 @@ use ks_platform_win::adapter::WinPlatform;
 use ks_winprobe::child::ChildFixture;
 use ks_winprobe::fixture::{self, Hwnd};
 use ks_winprobe::gate::Gate;
+use ks_winprobe::layout;
 use ks_winprobe::report::{Report, Status};
-use ks_winprobe::uia::{ComGuard, GET_TEXT_CALLS, Uia};
+use ks_winprobe::uia::{ComGuard, GET_TEXT_CALLS, Read, Uia};
+use windows::Win32::UI::Accessibility::IUIAutomationElement;
 
 const WRONG_LAYOUT: &str = "ghbdtn";
 const CONVERTED: &str = "привет";
@@ -62,8 +64,23 @@ fn is_converted(o: Outcome) -> bool {
     matches!(o, Outcome::Converted { .. })
 }
 
+/// `true` if a Russian keyboard layout is loaded in this session (without one the pipeline
+/// cannot switch and `layout_switched = false` is the expected result).
+fn ru_layout_loaded() -> bool {
+    layout::loaded_layouts()
+        .into_iter()
+        .any(|h| h.lang_id() & 0x3FF == 0x19)
+}
+
+/// `true` if the `units` characters before the caret of `el` equal `expected`.
+fn before_caret_is(u: &Uia, el: &IUIAutomationElement, expected: &str) -> bool {
+    let units = expected.encode_utf16().count() as i32;
+    matches!(u.read_before_caret(el, units), Ok(Some(Read::Text(t))) if t == expected)
+}
+
 fn record(r: &mut Report, o: Outcome) {
-    r.field("outcome", o.code());
+    r.field("outcome", o.code())
+        .field("ru_layout_loaded", ru_layout_loaded());
     if let Outcome::Converted {
         verified,
         layout_switched,
@@ -85,8 +102,38 @@ fn j1_edit_last_word_converted() {
     if let Err(why) = prepare(&c, k, WRONG_LAYOUT, (6, 6), &mut r, &env) {
         return common::finish(&r, Status::Skip, why);
     }
+    // Evidence for the post-check: an element obtained (and used) before the write versus
+    // an element obtained after it.
+    let diag = ComGuard::mta()
+        .ok()
+        .and_then(|com| Some((Uia::new().ok()?, com)));
+    let old_element = diag.as_ref().and_then(|(u, _)| {
+        let el = u.from_hwnd(k).ok()?;
+        r.field(
+            "old_element_reads_source",
+            before_caret_is(u, &el, WRONG_LAYOUT),
+        );
+        Some(el)
+    });
     let o = run_pipeline(&r, &Config::default());
     record(&mut r, o);
+    if let (Some((u, _)), Some(old)) = (diag.as_ref(), old_element.as_ref()) {
+        r.field(
+            "old_element_reads_result",
+            before_caret_is(u, old, CONVERTED),
+        );
+        if let Ok(fresh) = u.from_hwnd(k) {
+            r.field(
+                "fresh_element_reads_result",
+                before_caret_is(u, &fresh, CONVERTED),
+            );
+        }
+    }
+    drop(old_element);
+    if let Some((u, com)) = diag {
+        drop(u);
+        drop(com);
+    }
     let mut problems = Vec::new();
     if !is_converted(o) {
         problems.push("outcome is not CONVERTED");
@@ -126,10 +173,25 @@ fn j2_edit_selection_converted() {
     if fixture::get_text(k) != "abc привет xyz" {
         problems.push("field is not prefix + converted selection + suffix");
     }
+    if matches!(
+        o,
+        Outcome::Converted {
+            verified: false,
+            ..
+        }
+    ) {
+        problems.push("post-check did not confirm the write");
+    }
     common::verdict(&r, &problems);
 }
 
 /// j3: a password field is refused without a single `GetText` and without a change.
+///
+/// The content of an `ES_PASSWORD` edit cannot be read back from another process: the
+/// control answers a cross-process `WM_GETTEXT` with an empty string. So "unchanged" is
+/// checked through metadata the control does report — text length and selection — and the
+/// readback length is recorded **before** the pipeline runs, to show what the readback
+/// itself yields on an untouched field.
 #[test]
 fn j3_password_refused() {
     let id = "j3.pipeline.password_refused";
@@ -140,11 +202,26 @@ fn j3_password_refused() {
     if let Err(why) = prepare(&c, k, WRONG_LAYOUT, (6, 6), &mut r, &env) {
         return common::finish(&r, Status::Skip, why);
     }
+    let expected_len = WRONG_LAYOUT.encode_utf16().count();
+    let len_before = fixture::text_len(k);
+    let sel_before = fixture::get_sel(k);
+    r.field("len_before", len_before).field(
+        "cross_process_readback_units_before",
+        fixture::get_text(k).encode_utf16().count(),
+    );
     let calls_before = GET_TEXT_CALLS.load(Ordering::SeqCst);
     let o = run_pipeline(&r, &Config::default());
     let calls = GET_TEXT_CALLS.load(Ordering::SeqCst) - calls_before;
     record(&mut r, o);
-    r.field("get_text_calls", calls);
+    let len_after = fixture::text_len(k);
+    let sel_after = fixture::get_sel(k);
+    r.field("get_text_calls", calls)
+        .field("len_after", len_after)
+        .field("selection_unchanged", sel_before == sel_after)
+        .field(
+            "cross_process_readback_units_after",
+            fixture::get_text(k).encode_utf16().count(),
+        );
     let mut problems = Vec::new();
     if o != Outcome::Refused(Refusal::Password) {
         problems.push("outcome is not PASSWORD");
@@ -152,8 +229,11 @@ fn j3_password_refused() {
     if calls != 0 {
         problems.push("GetText was called on a password field");
     }
-    if fixture::get_text(k) != WRONG_LAYOUT {
-        problems.push("password field content changed");
+    if len_before != expected_len {
+        problems.push("password field was not set up (length differs before the run)");
+    }
+    if len_after != len_before || sel_after != sel_before {
+        problems.push("password field length or selection changed");
     }
     common::verdict(&r, &problems);
 }

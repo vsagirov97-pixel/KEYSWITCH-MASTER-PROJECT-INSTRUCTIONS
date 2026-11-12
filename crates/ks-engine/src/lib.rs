@@ -278,7 +278,8 @@ fn run_inner<P: Platform>(
     }
     platform.write(&converted)?;
     let verified = platform.verify(&converted);
-    let layout_switched = platform.switch_layout(&to);
+    // The layout follows the text: no switch unless the write was confirmed.
+    let layout_switched = verified && platform.switch_layout(&to);
     Ok(Outcome::Converted {
         verified,
         layout_switched,
@@ -300,6 +301,8 @@ mod tests {
         /// Simulates the user typing a character between read and select.
         race: bool,
         write_error: Option<Stop>,
+        /// Simulates a target whose text cannot be re-read after the write.
+        blind: bool,
     }
 
     impl Fake {
@@ -313,6 +316,7 @@ mod tests {
                 layout: None,
                 race: false,
                 write_error: None,
+                blind: false,
             }
         }
         fn caret_at_end(text: &str) -> Self {
@@ -370,7 +374,7 @@ mod tests {
         fn verify(&mut self, expected: &UserText) -> bool {
             let end = self.sel.0;
             let n = expected.utf16_len();
-            end >= n && self.slice(end - n, end).same_as(expected)
+            !self.blind && end >= n && self.slice(end - n, end).same_as(expected)
         }
         fn switch_layout(&mut self, lang: &str) -> bool {
             self.layout = Some(lang.to_owned());
@@ -488,6 +492,18 @@ mod tests {
         let mut f = Fake::caret_at_end("ghbdtn");
         f.write_error = Some(Stop::Failed(Failure::TargetChanged));
         assert_eq!(go(&mut f), Outcome::Failed(Failure::TargetChanged));
+        assert_eq!(f.layout, None);
+    }
+
+    #[test]
+    fn unverified_write_does_not_switch_layout() {
+        let mut f = Fake::caret_at_end("ghbdtn");
+        f.blind = true;
+        let expected = Outcome::Converted {
+            verified: false,
+            layout_switched: false,
+        };
+        assert_eq!(go(&mut f), expected);
         assert_eq!(f.layout, None);
     }
 
