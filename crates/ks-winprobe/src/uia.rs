@@ -1,8 +1,10 @@
 //! UI Automation client wrappers (MTA, CUIAutomation8, explicit timeouts).
 //!
-//! `read_text` is the only path that calls `IUIAutomationTextRange::GetText` on an element's
-//! document, and it refuses password elements *before* touching the text. Every call is
-//! counted in [`GET_TEXT_CALLS`] so tests can prove that a password field was never read.
+//! WS-03: `GetText` is reachable only through [`Uia::read_text`] and [`Uia::read_selection`],
+//! both of which pass [`password_guard`] first: UIA `IsPassword` (errors = password, fail
+//! closed) **and** `ES_PASSWORD` in `GWL_STYLE` of the element's native window (edit
+//! family). Every call is counted in [`GET_TEXT_CALLS`] so tests can prove that a password
+//! field was never read.
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -108,7 +110,7 @@ impl Uia {
 
     /// Guarded read of the whole document range, at most `max` UTF-16 units.
     pub fn read_text(&self, el: &IUIAutomationElement, max: i32) -> Result<Read, String> {
-        if facts(el).is_password {
+        if password_guard(el).is_some() {
             return Ok(Read::RefusedPassword);
         }
         let Some(tp) = text_pattern(el) else {
@@ -118,6 +120,52 @@ impl Uia {
         let doc = unsafe { tp.DocumentRange() }.map_err(|e| format!("DocumentRange: {e}"))?;
         Ok(Read::Text(range_text(&doc, max)?))
     }
+
+    /// Guarded read of the (single) current selection of `el`, at most `max` units.
+    /// `Ok(None)` if there is not exactly one selection range.
+    pub fn read_selection(
+        &self,
+        el: &IUIAutomationElement,
+        max: i32,
+    ) -> Result<Option<Read>, String> {
+        if password_guard(el).is_some() {
+            return Ok(Some(Read::RefusedPassword));
+        }
+        let Some(tp) = text_pattern(el) else {
+            return Ok(Some(Read::NoTextPattern));
+        };
+        let sel = selection(&tp)?;
+        if sel.len() != 1 {
+            return Ok(None);
+        }
+        Ok(Some(Read::Text(range_text(&sel[0], max)?)))
+    }
+}
+
+/// Which check marked an element as a password (WS-03).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PasswordBy {
+    /// UIA `CurrentIsPassword` was true or failed (fail closed).
+    UiaIsPassword,
+    /// `GWL_STYLE` of the native window has `ES_PASSWORD` (edit family).
+    EsPasswordStyle,
+}
+
+/// WS-03 single gate before any text read: `Some(reason)` = do not read.
+pub fn password_guard(el: &IUIAutomationElement) -> Option<PasswordBy> {
+    // SAFETY: property getter on a live interface.
+    let uia_pw = unsafe { el.CurrentIsPassword() }.map_or(true, |b| b.as_bool());
+    if uia_pw {
+        return Some(PasswordBy::UiaIsPassword);
+    }
+    // SAFETY: property getter on a live interface.
+    if let Ok(h) = unsafe { el.CurrentNativeWindowHandle() }
+        && !h.0.is_null()
+        && crate::gate::hwnd_is_password(Hwnd::from_raw(h))
+    {
+        return Some(PasswordBy::EsPasswordStyle);
+    }
+    None
 }
 
 /// Metadata of an element (no text).
@@ -193,8 +241,8 @@ pub fn text_pattern(el: &IUIAutomationElement) -> Option<IUIAutomationTextPatter
     unsafe { el.GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId) }.ok()
 }
 
-/// `GetText(max)` on a range (counted).
-pub fn range_text(r: &IUIAutomationTextRange, max: i32) -> Result<String, String> {
+/// `GetText(max)` on a range (counted). Private: callers go through the guarded readers.
+fn range_text(r: &IUIAutomationTextRange, max: i32) -> Result<String, String> {
     GET_TEXT_CALLS.fetch_add(1, Ordering::SeqCst);
     // SAFETY: method call on a live interface; the BSTR is owned and freed on drop.
     unsafe { r.GetText(max) }

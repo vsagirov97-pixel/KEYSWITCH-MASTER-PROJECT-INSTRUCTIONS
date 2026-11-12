@@ -19,12 +19,11 @@ const OTHER: &str = "synthetic-other-writer";
 const OTHER_PROCESS: &str = "synthetic-other-process";
 const CF_UNICODETEXT: u32 = 13;
 
+/// WS-01: the sequence number is the one read under `OpenClipboard` (by `put_text`), not
+/// after `CloseClipboard` — a writer slipping in between can no longer be taken for us.
 fn put(owner: Hwnd, text: &str, private: bool) -> Result<u32, String> {
-    {
-        let o = clipboard::open(owner)?;
-        clipboard::put_text(&o, text, private)?;
-    }
-    Ok(clipboard::seq())
+    let o = clipboard::open(owner)?;
+    clipboard::put_text(&o, text, private)
 }
 
 fn read(owner: Hwnd) -> Option<String> {

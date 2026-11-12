@@ -1,10 +1,14 @@
-//! Spike S-2a: Windows integration probe.
+//! Spikes S-2a/S-2b: Windows integration probe.
 //!
 //! This crate is **not product code**. It contains a Win32 test fixture (a window with
 //! classic `EDIT` and `RICHEDIT50W` controls, created inside the test process) and thin
 //! wrappers over UI Automation, `EM_REPLACESEL`, `SendInput(KEYEVENTF_UNICODE)`, the
 //! clipboard, keyboard layouts and `RegisterHotKey`. Integration tests in `tests/` use them
 //! to record real behaviour on a Windows CI runner.
+//!
+//! S-2b adds a separate fixture process (`src/bin/ks-winprobe-fixture.rs`, see [`child`]),
+//! the clipboard contract with delayed rendering, the target fingerprint / generation gate
+//! ([`gate`]) and integrity-level helpers ([`integrity`]).
 //!
 //! Ground rules (CLAUDE.md, SECURITY_REVIEW):
 //! - no keyboard hooks, no injection into other processes, no networking;
@@ -14,8 +18,11 @@
 //!
 //! On non-Windows targets the crate compiles to (almost) nothing.
 
+pub mod policy;
 pub mod report;
 
+#[cfg(windows)]
+pub mod child;
 #[cfg(windows)]
 pub mod clipboard;
 #[cfg(windows)]
@@ -23,9 +30,13 @@ pub mod desktop;
 #[cfg(windows)]
 pub mod fixture;
 #[cfg(windows)]
+pub mod gate;
+#[cfg(windows)]
 pub mod hotkey;
 #[cfg(windows)]
 pub mod input;
+#[cfg(windows)]
+pub mod integrity;
 #[cfg(windows)]
 pub mod layout;
 #[cfg(windows)]

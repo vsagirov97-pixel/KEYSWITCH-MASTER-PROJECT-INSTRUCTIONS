@@ -310,7 +310,11 @@ fn a4_selection_roundtrip() {
         if fg {
             let _ = fx.focus(h);
         }
-        let Some(tp) = uia.from_hwnd(h).ok().and_then(|el| uia::text_pattern(&el)) else {
+        let Some((el, tp)) = uia
+            .from_hwnd(h)
+            .ok()
+            .and_then(|el| uia::text_pattern(&el).map(|tp| (el, tp)))
+        else {
             r.field(label, "no_text_pattern");
             problems.push("no TextPattern");
             continue;
@@ -319,8 +323,9 @@ fn a4_selection_roundtrip() {
         // 1. EM_SETSEL(2, 5) → UIA GetSelection text == chars 2..5 of the first line.
         fixture::set_sel(h, 2, 5);
         let sel = uia::selection(&tp).unwrap_or_default();
-        let sel_ok =
-            sel.len() == 1 && uia::range_text(&sel[0], 100).is_ok_and(|t| t == FIRST_LINE[2..5]);
+        // WS-03: the text is read only through the guarded selection reader.
+        let sel_ok = sel.len() == 1
+            && matches!(uia.read_selection(&el, 100), Ok(Some(Read::Text(t))) if t == FIRST_LINE[2..5]);
         notes.push(format!(
             "getsel_ranges={} getsel_matches_em_setsel={sel_ok}",
             sel.len()
@@ -336,7 +341,7 @@ fn a4_selection_roundtrip() {
                 let back = uia::selection(&tp).unwrap_or_default();
                 let cmp = back.len() == 1 && uia::same_range(&back[0], &pr);
                 let txt = back.len() == 1
-                    && uia::range_text(&back[0], 100).is_ok_and(|t| t == FIRST_LINE[..6]);
+                    && matches!(uia.read_selection(&el, 100), Ok(Some(Read::Text(t))) if t == FIRST_LINE[..6]);
                 notes.push(format!(
                     "select_ok={selected} em_getsel={}..{} compare={cmp} text_matches={txt}",
                     em.0, em.1

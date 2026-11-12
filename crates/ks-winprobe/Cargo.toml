@@ -1,6 +1,6 @@
 [package]
 name = "ks-winprobe"
-description = "Spike S-2a: Windows integration probe (test fixture + integration tests). Not product code."
+description = "Spikes S-2a/S-2b: Windows integration probe (test fixtures + integration tests). Not product code."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -27,6 +27,7 @@ undocumented_unsafe_blocks = "deny"
 windows = { version = "=0.62.2", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
+  "Win32_Security",
   "Win32_System_Com",
   "Win32_System_DataExchange",
   "Win32_System_LibraryLoader",

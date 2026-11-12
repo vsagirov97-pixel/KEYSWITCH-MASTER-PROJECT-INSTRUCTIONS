@@ -3,8 +3,9 @@
 
 use std::sync::MutexGuard;
 
+use ks_winprobe::child::ChildFixture;
 use ks_winprobe::desktop::{self, DesktopInfo};
-use ks_winprobe::fixture::{Fixture, Foreground};
+use ks_winprobe::fixture::{Fixture, Foreground, Hwnd};
 use ks_winprobe::report::{Report, Status, skip_disabled};
 use ks_winprobe::{probe_enabled, serial};
 
@@ -69,4 +70,44 @@ pub fn verdict(r: &Report, problems: &[&'static str]) {
     } else {
         finish(r, Status::Fail, &problems.join("; "));
     }
+}
+
+/// Path of the S-2b fixture executable (built by Cargo for integration tests).
+pub const FIXTURE_EXE: &str = env!("CARGO_BIN_EXE_ks-winprobe-fixture");
+
+/// Spawns the separate fixture process in `mode` or fails the scenario.
+pub fn child(r: &Report, mode: &str) -> ChildFixture {
+    match ChildFixture::spawn(std::path::Path::new(FIXTURE_EXE), mode) {
+        Ok(c) => c,
+        Err(e) => {
+            finish(r, Status::Fail, &format!("child fixture: {e}"));
+            unreachable!("finish panics on FAIL")
+        }
+    }
+}
+
+/// Makes the child fixture foreground and focuses `control`; `Err(reason)` = SKIP.
+pub fn child_target(
+    c: &ChildFixture,
+    control: Hwnd,
+    r: &mut Report,
+    env: &Env,
+) -> Result<(), &'static str> {
+    if let Some(why) = env.desktop.unusable_reason() {
+        return Err(why);
+    }
+    let fg = c.bring_to_foreground();
+    r.field("child_foreground", fg.label());
+    if !fg.ok() {
+        return Err("child fixture could not become the foreground window");
+    }
+    if !c.focus(control) {
+        return Err("SetFocus in the child fixture failed");
+    }
+    Ok(())
+}
+
+/// Labels for fields: elapsed milliseconds or -1.
+pub fn ms(d: Option<std::time::Duration>) -> i64 {
+    d.map_or(-1, |d| d.as_millis() as i64)
 }

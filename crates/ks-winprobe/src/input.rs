@@ -1,10 +1,13 @@
 //! Write method W3: `SendInput` with `KEYEVENTF_UNICODE`.
 //!
-//! The writer refuses text containing control characters (`\n`, `\r`, `\t`, other C0/C1)
-//! **before** any input is generated: in chat apps Enter sends the message, Tab moves focus.
+//! The writer refuses text containing control characters (`\n`, `\r`, `\t`, other C0/C1),
+//! format characters (Cf: bidi overrides/isolates, zero-width, BOM...) and U+2028/U+2029
+//! (WS-06) **before** any input is generated: in chat apps Enter sends the message, Tab moves
+//! focus, bidi controls can disguise the visible text.
 //! Input is sent in batches; a caller-supplied check runs before every batch (KeySwitch will
 //! re-verify the focus fingerprint there).
 
+use crate::policy::CharClass;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
     KEYEVENTF_UNICODE, SendInput, VIRTUAL_KEY, VK_RETURN,
@@ -18,6 +21,10 @@ pub const BATCH_UNITS: usize = 32;
 pub enum Refusal {
     /// Text contains a control character (`\n`, `\r`, `\t`, ...).
     ControlChar,
+    /// Text contains a format character (general category Cf), WS-06.
+    FormatChar,
+    /// Text contains U+2028 / U+2029 (categories Zl / Zp), WS-06.
+    Separator,
     /// Nothing to write.
     Empty,
 }
@@ -57,8 +64,11 @@ pub fn build_batches(text: &str) -> Result<Vec<Vec<INPUT>>, Refusal> {
     if text.is_empty() {
         return Err(Refusal::Empty);
     }
-    if text.chars().any(char::is_control) {
-        return Err(Refusal::ControlChar);
+    match crate::policy::first_forbidden(text) {
+        Some(CharClass::Control) => return Err(Refusal::ControlChar),
+        Some(CharClass::Format) => return Err(Refusal::FormatChar),
+        Some(CharClass::Separator) => return Err(Refusal::Separator),
+        None => {}
     }
     let mut batches: Vec<Vec<INPUT>> = Vec::new();
     let mut cur: Vec<INPUT> = Vec::new();
@@ -97,10 +107,13 @@ fn key(unit: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
 /// `true` if any event would produce Enter (VK_RETURN, or a Unicode CR/LF scan value).
 pub fn contains_return(batches: &[Vec<INPUT>]) -> bool {
     batches.iter().flatten().any(|i| {
-        // SAFETY: every INPUT built by this module is INPUT_KEYBOARD, so `ki` is the
-        // initialised union member; other types are skipped.
+        if i.r#type != INPUT_KEYBOARD {
+            return false;
+        }
+        // SAFETY: (WS-09) the type tag was checked just above, so `ki` is the union member
+        // that was initialised for this INPUT; it is `Copy` plain data.
         let ki = unsafe { i.Anonymous.ki };
-        i.r#type == INPUT_KEYBOARD && (ki.wVk == VK_RETURN || ki.wScan == 0x0D || ki.wScan == 0x0A)
+        ki.wVk == VK_RETURN || ki.wScan == 0x0D || ki.wScan == 0x0A
     })
 }
 
@@ -132,7 +145,8 @@ pub fn send_unicode(text: &str, mut before_batch: impl FnMut() -> bool) -> Resul
     })
 }
 
-/// Sends raw virtual-key down/up events (used only by the hotkey-delivery sub-check).
+/// Sends raw virtual-key down/up events. PROBE-ONLY (WS-07): a generic VK sender must never
+/// reach product code (CI guard step forbids the name outside `crates/ks-winprobe`).
 /// Returns the number of injected events.
 pub fn send_vk_chord(vks: &[VIRTUAL_KEY]) -> u32 {
     let mut v: Vec<INPUT> = Vec::new();
@@ -158,6 +172,30 @@ pub fn send_vk_chord(vks: &[VIRTUAL_KEY]) -> u32 {
     unsafe { SendInput(&v, std::mem::size_of::<INPUT>() as i32) }
 }
 
+/// Injects a single key-down (`down = true`) or key-up for `vk`. PROBE-ONLY (WS-07), used to
+/// simulate a held modifier (WS-05). Returns the number of injected events.
+pub fn send_vk_state(vk: VIRTUAL_KEY, down: bool) -> u32 {
+    let flags = if down {
+        KEYBD_EVENT_FLAGS(0)
+    } else {
+        KEYEVENTF_KEYUP
+    };
+    let ev = [INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    }];
+    // SAFETY: one fully initialised keyboard INPUT; cbSize is one INPUT.
+    unsafe { SendInput(&ev, std::mem::size_of::<INPUT>() as i32) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,6 +206,9 @@ mod tests {
         assert_eq!(build_batches("a\r").err(), Some(Refusal::ControlChar));
         assert_eq!(build_batches("\tb").err(), Some(Refusal::ControlChar));
         assert_eq!(build_batches("").err(), Some(Refusal::Empty));
+        assert_eq!(build_batches("a\u{2028}").err(), Some(Refusal::Separator));
+        assert_eq!(build_batches("a\u{202E}b").err(), Some(Refusal::FormatChar));
+        assert_eq!(build_batches("a\u{2066}b").err(), Some(Refusal::FormatChar));
     }
 
     #[test]
