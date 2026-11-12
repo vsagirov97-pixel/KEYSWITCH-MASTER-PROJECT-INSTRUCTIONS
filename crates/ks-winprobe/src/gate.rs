@@ -136,6 +136,9 @@ pub enum Abort {
     /// Foreground/focus/pid/start time differ from the captured fingerprint (or capture
     /// failed now).
     TargetChanged,
+    /// The previous batch was not observed in the target in time (see `i4`: `SendInput`
+    /// is asynchronous, unconsumed input follows a foreground change).
+    NotDelivered,
 }
 
 impl Abort {
@@ -145,6 +148,7 @@ impl Abort {
             Abort::Generation => "generation",
             Abort::Modifiers => "modifiers",
             Abort::TargetChanged => "target_changed",
+            Abort::NotDelivered => "not_delivered",
         }
     }
 }

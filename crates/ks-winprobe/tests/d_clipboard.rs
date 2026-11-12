@@ -19,11 +19,12 @@ const OTHER: &str = "synthetic-other-writer";
 const OTHER_PROCESS: &str = "synthetic-other-process";
 const CF_UNICODETEXT: u32 = 13;
 
-/// WS-01: the sequence number is the one read under `OpenClipboard` (by `put_text`), not
-/// after `CloseClipboard` — a writer slipping in between can no longer be taken for us.
+/// Returns the sequence number after `CloseClipboard` (the one under `OpenClipboard` is not
+/// final, see `clipboard::commit`); the restore guard additionally checks the owner (WS-01).
 fn put(owner: Hwnd, text: &str, private: bool) -> Result<u32, String> {
     let o = clipboard::open(owner)?;
-    clipboard::put_text(&o, text, private)
+    clipboard::put_text(&o, text, private)?;
+    Ok(clipboard::commit(o))
 }
 
 fn read(owner: Hwnd) -> Option<String> {
@@ -63,10 +64,14 @@ fn d1_privacy_formats_and_enumeration() {
         return common::finish(&r, Status::Skip, why);
     }
     let seq0 = clipboard::seq();
-    let seq1 = match put(owner, TEMP, true) {
-        Ok(s) => s,
+    // WS-01 fact: number under OpenClipboard after the last write vs. after CloseClipboard.
+    let (under, seq1) = match clipboard::open(owner)
+        .and_then(|o| clipboard::put_text(&o, TEMP, true).map(|u| (u, clipboard::commit(o))))
+    {
+        Ok(v) => v,
         Err(e) => return fail(&r, &e),
     };
+    r.field("seq_delta_close_after_last_write", seq1.wrapping_sub(under));
     let ids = match clipboard::open(owner) {
         Ok(o) => clipboard::format_ids(&o),
         Err(e) => return fail(&r, &e),
@@ -114,7 +119,7 @@ fn d2_restore_only_if_unchanged() {
     // Positive control: nobody interferes → restored.
     let res = put(owner, SNAPSHOT, false)
         .and_then(|_| put(owner, TEMP, true))
-        .and_then(|our| clipboard::restore_if_unchanged(owner, our, SNAPSHOT));
+        .and_then(|our| clipboard::restore_if_unchanged(owner, owner, our, SNAPSHOT));
     let restored_ok =
         matches!(res, Ok(Restore::Restored)) && read(owner).as_deref() == Some(SNAPSHOT);
     r.field("undisturbed_restored", restored_ok);
@@ -131,9 +136,12 @@ fn d2_restore_only_if_unchanged() {
         .and_then(|_| put(owner, TEMP, true))
         .and_then(|our| {
             put(other.controls.main, OTHER, false)?;
-            clipboard::restore_if_unchanged(owner, our, SNAPSHOT)
+            clipboard::restore_if_unchanged(owner, owner, our, SNAPSHOT)
         });
-    let skipped = matches!(res, Ok(Restore::SkippedSeqChanged));
+    let skipped = matches!(
+        res,
+        Ok(Restore::SkippedSeqChanged | Restore::SkippedOwnerChanged)
+    );
     let kept = read(owner).as_deref() == Some(OTHER);
     r.field("other_window_restore_skipped", skipped)
         .field("other_window_data_kept", kept);
@@ -152,10 +160,13 @@ fn d2_restore_only_if_unchanged() {
                 .status()
                 .map_err(|e| format!("spawn powershell: {e}"))?;
             ps_ran = st.success();
-            clipboard::restore_if_unchanged(owner, our, SNAPSHOT)
+            clipboard::restore_if_unchanged(owner, owner, our, SNAPSHOT)
         });
     if ps_ran {
-        let skipped = matches!(res, Ok(Restore::SkippedSeqChanged));
+        let skipped = matches!(
+            res,
+            Ok(Restore::SkippedSeqChanged | Restore::SkippedOwnerChanged)
+        );
         let kept = read(owner).as_deref() == Some(OTHER_PROCESS);
         r.field("other_process_restore_skipped", skipped)
             .field("other_process_data_kept", kept);

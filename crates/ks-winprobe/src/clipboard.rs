@@ -1,6 +1,7 @@
 //! Clipboard contract (SYSTEM_ARCHITECTURE §4.1): snapshot by whitelist without touching
-//! foreign formats, privacy formats (D-13), sequence number read **under** `OpenClipboard`
-//! (WS-01), restore-only-if-unchanged with the original privacy markers (WS-02), delayed
+//! foreign formats, privacy formats (D-13), restore guard = sequence number **and**
+//! clipboard owner checked under `OpenClipboard` (WS-01, see [`commit`]),
+//! restore-only-if-unchanged with the original privacy markers (WS-02), delayed
 //! rendering with requester attribution (XR-01) and a deadline-bounded snapshot (XR-04).
 
 use std::sync::mpsc;
@@ -63,6 +64,27 @@ pub fn open_for(owner: Option<Hwnd>, wait: Duration) -> Result<Open, String> {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+/// WS-01, measured on windows-latest (run 43177335614): the sequence number read under
+/// `OpenClipboard` right after our last `SetClipboardData` is **not final** — it grows
+/// again at `CloseClipboard` (+3 observed). So "our" number can only be read after the
+/// close, which leaves a window for another writer. The restore guard therefore checks,
+/// under `OpenClipboard`, both the number and that the clipboard owner is still the window
+/// we wrote with (any writer calling `EmptyClipboard` changes the owner).
+///
+/// Closes the clipboard and returns the sequence number observed right after.
+pub fn commit(open: Open) -> u32 {
+    drop(open);
+    seq()
+}
+
+/// Window that currently owns the clipboard (NULL handle if none).
+pub fn owner_hwnd() -> Hwnd {
+    // SAFETY: trivial query.
+    unsafe { GetClipboardOwner() }
+        .map(Hwnd::from_raw)
+        .unwrap_or(Hwnd::from_isize(0))
 }
 
 /// Current clipboard sequence number (0 = no WINSTA_ACCESSCLIPBOARD).
@@ -200,8 +222,8 @@ fn put_privacy(private: bool) -> Result<(), String> {
 }
 
 /// Replaces the clipboard with `text` (CF_UNICODETEXT) and, if `private`, the three
-/// privacy formats (DWORD 0 each). Returns the sequence number read **while the clipboard
-/// is still open** (WS-01): nobody else can write between our last write and this read.
+/// privacy formats (DWORD 0 each). Returns the sequence number read while the clipboard
+/// is still open — informational only, it is not final (see [`commit`]).
 pub fn put_text(open: &Open, text: &str, private: bool) -> Result<u32, String> {
     let _ = open;
     // SAFETY: clipboard is open by us (`open`); EmptyClipboard makes our window the owner.
@@ -212,7 +234,7 @@ pub fn put_text(open: &Open, text: &str, private: bool) -> Result<u32, String> {
 }
 
 /// Puts arbitrary `(format, bytes)` items (synthetic writers in tests and restore).
-/// Returns the sequence number read under `OpenClipboard` (WS-01).
+/// Returns the (non-final) sequence number read under `OpenClipboard`.
 pub fn put_items(open: &Open, items: &[(u32, Vec<u8>)]) -> Result<u32, String> {
     let _ = open;
     // SAFETY: clipboard is open by us (`open`).
@@ -369,25 +391,49 @@ pub enum Restore {
     Restored,
     /// Someone wrote after us; restore skipped (their data is kept).
     SkippedSeqChanged,
+    /// The clipboard owner is no longer the window we wrote with; restore skipped.
+    SkippedOwnerChanged,
 }
 
-/// Restores CF_UNICODETEXT `snapshot` only if the sequence number (checked **under**
-/// `OpenClipboard`) still equals `our_seq` (S-2a API, text only).
-pub fn restore_if_unchanged(owner: Hwnd, our_seq: u32, snapshot: &str) -> Result<Restore, String> {
+/// The guard, evaluated under `OpenClipboard`.
+fn guard(temp_owner: Hwnd, expected: u32) -> Option<Restore> {
+    if owner_hwnd() != temp_owner {
+        return Some(Restore::SkippedOwnerChanged);
+    }
+    if seq() != expected {
+        return Some(Restore::SkippedSeqChanged);
+    }
+    None
+}
+
+/// Restores CF_UNICODETEXT `snapshot` only if, under `OpenClipboard`, the owner is still
+/// `temp_owner` and the sequence number equals `our_seq` (text only).
+pub fn restore_if_unchanged(
+    owner: Hwnd,
+    temp_owner: Hwnd,
+    our_seq: u32,
+    snapshot: &str,
+) -> Result<Restore, String> {
     let o = open(owner)?;
-    if seq() != our_seq {
-        return Ok(Restore::SkippedSeqChanged);
+    if let Some(skip) = guard(temp_owner, our_seq) {
+        return Ok(skip);
     }
     put_text(&o, snapshot, false)?;
     Ok(Restore::Restored)
 }
 
 /// WS-02: restores every whitelisted item of `snap` byte-for-byte — including the original
-/// privacy markers — only if the sequence number under `OpenClipboard` equals `expected`.
-pub fn restore_snapshot(owner: Hwnd, expected: u32, snap: &Snapshot) -> Result<Restore, String> {
+/// privacy markers — only if, under `OpenClipboard`, the owner is still `temp_owner` and
+/// the sequence number equals `expected`.
+pub fn restore_snapshot(
+    owner: Hwnd,
+    temp_owner: Hwnd,
+    expected: u32,
+    snap: &Snapshot,
+) -> Result<Restore, String> {
     let o = open(owner)?;
-    if seq() != expected {
-        return Ok(Restore::SkippedSeqChanged);
+    if let Some(skip) = guard(temp_owner, expected) {
+        return Ok(skip);
     }
     put_items(&o, &snap.items)?;
     Ok(Restore::Restored)
@@ -463,8 +509,8 @@ impl DelayedOwner {
     }
 
     /// Becomes the clipboard owner: CF_UNICODETEXT delayed (rendered from `text` on demand)
-    /// plus, if `private`, the D-13 markers as real data. Returns the sequence number read
-    /// under `OpenClipboard` (WS-01).
+    /// plus, if `private`, the D-13 markers as real data. Returns the sequence number after
+    /// `CloseClipboard` (see [`commit`]).
     pub fn put_delayed(&self, text: &str, private: bool) -> Result<u32, String> {
         *owner_state() = Some(OwnerState {
             payload: text.to_owned(),
@@ -477,9 +523,7 @@ impl DelayedOwner {
         unsafe { EmptyClipboard() }.map_err(|e| format!("EmptyClipboard: {e}"))?;
         set_delayed(u32::from(CF_UNICODETEXT.0))?;
         put_privacy(private)?;
-        let s = seq();
-        drop(o);
-        Ok(s)
+        Ok(commit(o))
     }
 
     /// Renders received so far.

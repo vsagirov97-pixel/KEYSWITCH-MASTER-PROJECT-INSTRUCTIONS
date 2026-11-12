@@ -10,7 +10,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use ks_winprobe::child::ChildFixture;
-use ks_winprobe::fixture;
+use ks_winprobe::fixture::{self, Hwnd};
 use ks_winprobe::gate::{self, Abort, Fingerprint, Gate, TargetRefusal};
 use ks_winprobe::input::{self, BATCH_UNITS, SendError};
 use ks_winprobe::report::{Report, Status};
@@ -36,12 +36,15 @@ fn capture_or_skip(r: &Report) -> Option<Fingerprint> {
 }
 
 /// Gated send: `hook(batch_index)` runs before the check (to simulate events).
+/// `confirm = Some(h)`: before batch `i > 0` wait (≤ 500 ms) until the target holds the
+/// `i * BATCH_UNITS` units already sent — `SendInput` is asynchronous and input that was
+/// not consumed yet follows a foreground change (measured in run 43177335614).
 fn gated_send(
     text: &str,
     fp: &Fingerprint,
     g: &Gate,
     mut hook: impl FnMut(usize),
-    pause: Duration,
+    confirm: Option<Hwnd>,
 ) -> (Result<input::Sent, SendError>, Option<Abort>) {
     let tok = g.begin();
     let n = Cell::new(0usize);
@@ -49,8 +52,15 @@ fn gated_send(
     let res = input::send_unicode(text, || {
         let i = n.get();
         n.set(i + 1);
-        if !pause.is_zero() && i > 0 {
-            std::thread::sleep(pause);
+        if let Some(h) = confirm
+            && i > 0
+            && fixture::wait_until(Duration::from_millis(500), || {
+                fixture::text_len(h) >= i * BATCH_UNITS
+            })
+            .is_none()
+        {
+            abort = Some(Abort::NotDelivered);
+            return false;
         }
         hook(i);
         match gate::pre_batch(fp, g, tok) {
@@ -156,7 +166,7 @@ fn i2_modifier_held_refuses() {
     std::thread::sleep(Duration::from_millis(30));
     let held = gate::modifiers_down();
     let g = Gate::new();
-    let (res, abort) = gated_send("Ghbdtn", &fp, &g, |_| {}, Duration::ZERO);
+    let (res, abort) = gated_send("Ghbdtn", &fp, &g, |_| {}, None);
     let up = input::send_vk_state(VK_CONTROL, false);
     std::thread::sleep(Duration::from_millis(30));
     let after = gate::modifiers_down();
@@ -212,7 +222,7 @@ fn i3_generation_bump_aborts() {
                 g.bump();
             }
         },
-        Duration::ZERO,
+        Some(h),
     );
     let _ = fixture::wait_until(Duration::from_secs(2), || {
         fixture::text_len(h) >= 2 * BATCH_UNITS
@@ -235,9 +245,11 @@ fn steal(thief: &ChildFixture) -> bool {
     thief.bring_to_foreground().ok() && thief.focus(thief.controls.single)
 }
 
-/// i4 WS-05: foreground stolen between batches (deterministic: right before batch 2's check)
-/// → abort, 0 units in the thief, exactly 2 batches in the target. i5: asynchronous thief
-/// while batches are spaced 15 ms → at most one batch lands in the wrong window.
+/// i4 WS-05: foreground stolen between batches, with per-batch delivery confirmation.
+/// Deterministic (right before batch 2's check) → abort, 0 units in the thief, exactly 2
+/// batches in the target. Asynchronous thief (after 40 ms) → at most one batch misdirected.
+/// Without confirmation (run 43177335614, job 131051106723) 63 of 64 and 59 of 96 injected
+/// units did not reach the target: unconsumed input follows the foreground change.
 #[test]
 fn i4_foreground_stolen_between_batches() {
     let id = "i4.gate.foreground_stolen";
@@ -267,7 +279,7 @@ fn i4_foreground_stolen_between_batches() {
                 stolen.set(steal(&b));
             }
         },
-        Duration::ZERO,
+        Some(a.controls.multi),
     );
     std::thread::sleep(Duration::from_millis(300));
     let in_target = fixture::text_len(a.controls.multi);
@@ -303,24 +315,28 @@ fn i4_foreground_stolen_between_batches() {
         std::thread::sleep(Duration::from_millis(40));
         fixture::request_foreground(bm).ok() && fixture::request_focus(bm, bs)
     });
-    let (res, abort) = gated_send(&text200(), &fp, &g, |_| {}, Duration::from_millis(15));
+    let (res, abort) = gated_send(&text200(), &fp, &g, |_| {}, Some(a.controls.multi));
     let async_stolen = thief.join().unwrap_or(false);
     std::thread::sleep(Duration::from_millis(300));
     let in_target = fixture::text_len(a.controls.multi);
     let in_thief = fixture::text_len(b.controls.single);
+    // Units injected but not in the target went to the wrong window (the thief's edit or,
+    // before it had focus, the thief's top-level window, where they are discarded).
+    let injected_units = sent_batches(&res).max(0) as usize * BATCH_UNITS;
+    let misdirected = injected_units.saturating_sub(in_target);
     r.field(
         "async",
         format!(
-            "stolen={async_stolen} abort={} batches_sent={} units_target={in_target} units_thief={in_thief}",
+            "stolen={async_stolen} abort={} batches_sent={} units_target={in_target} units_thief={in_thief} units_misdirected={misdirected}",
             abort.map_or("none", |x| x.label()),
             sent_batches(&res)
         ),
     );
     if async_stolen {
-        if abort != Some(Abort::TargetChanged) {
+        if abort.is_none() {
             problems.push("async steal: operation not aborted");
         }
-        if in_thief > BATCH_UNITS {
+        if misdirected > BATCH_UNITS {
             problems.push("async steal: more than one batch reached the wrong window");
         }
     } else {

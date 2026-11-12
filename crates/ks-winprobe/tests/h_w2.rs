@@ -139,14 +139,16 @@ fn h1_snapshot_whitelist_and_markers() {
                 continue;
             }
         };
-        let ours = match clipboard::open(owner).and_then(|o| clipboard::put_text(&o, TEMP, true)) {
+        let ours = match clipboard::open(owner)
+            .and_then(|o| clipboard::put_text(&o, TEMP, true).map(|_| clipboard::commit(o)))
+        {
             Ok(q) => q,
             Err(_) => {
                 problems.push("temporary put failed");
                 continue;
             }
         };
-        let restored = clipboard::restore_snapshot(owner, ours, &s);
+        let restored = clipboard::restore_snapshot(owner, owner, ours, &s);
         let after = snap(owner);
         let all_items_equal = after.as_ref().is_ok_and(|a| s.subset_of(a));
         let markers_back = clipboard::privacy_formats()
@@ -216,12 +218,13 @@ fn h1_snapshot_whitelist_and_markers() {
     common::verdict(&r, &problems);
 }
 
-/// h2 WS-01: with the sequence number read under OpenClipboard, an interleaving writer
-/// (right after our CloseClipboard) is always detected; the S-2a order (read after close)
-/// would have been fooled in `old_order_fooled` iterations.
+/// h2 WS-01: a writer slips in right after our CloseClipboard. The sequence number alone
+/// (which can only be read after the close) is fooled whenever the writer is faster than
+/// our read (`seq_only_guard_fooled`); the owner check under OpenClipboard still refuses
+/// every restore.
 #[test]
-fn h2_seq_under_open_vs_interleaving_writer() {
-    let id = "h2.w2.seq_under_open_ws01";
+fn h2_restore_guard_vs_interleaving_writer() {
+    let id = "h2.w2.restore_guard_ws01";
     let Some(env) = common::start(id) else { return };
     let mut r = common::report(id, &env);
     let fx = common::fixture(&r);
@@ -232,8 +235,8 @@ fn h2_seq_under_open_vs_interleaving_writer() {
     };
     let rh = racer.controls.main;
     let n = 20;
-    let (mut skipped, mut kept, mut fooled) = (0, 0, 0);
-    for _ in 0..n {
+    let (mut skipped, mut by_owner, mut kept, mut fooled) = (0, 0, 0, 0);
+    for i in 0..n {
         let (tx, rx) = std::sync::mpsc::channel::<()>();
         let t = std::thread::spawn(move || {
             if rx.recv().is_ok()
@@ -242,27 +245,30 @@ fn h2_seq_under_open_vs_interleaving_writer() {
                 let _ = clipboard::put_text(&o, OTHER, false);
             }
         });
-        let under = {
-            let o = match clipboard::open(owner) {
-                Ok(o) => o,
-                Err(e) => return common::finish(&r, Status::Fail, &e),
-            };
-            let s = clipboard::put_text(&o, TEMP, true).unwrap_or(0);
-            let _ = tx.send(());
-            s
+        let o = match clipboard::open(owner) {
+            Ok(o) => o,
+            Err(e) => return common::finish(&r, Status::Fail, &e),
         };
-        // S-2a order: read after CloseClipboard; the racer may already have written.
-        std::thread::yield_now();
-        let after_close = clipboard::seq();
+        let _ = clipboard::put_text(&o, TEMP, true);
+        let _ = tx.send(());
+        drop(o);
+        if i % 2 == 1 {
+            // Simulated preemption between our CloseClipboard and our read of the number.
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let ours = clipboard::seq();
         let _ = t.join();
-        if after_close != under {
+        if ours == clipboard::seq() {
+            // The racer had already written when we read "our" number.
             fooled += 1;
         }
-        if matches!(
-            clipboard::restore_if_unchanged(owner, under, USER),
-            Ok(Restore::SkippedSeqChanged)
-        ) {
-            skipped += 1;
+        match clipboard::restore_if_unchanged(owner, owner, ours, USER) {
+            Ok(Restore::SkippedOwnerChanged) => {
+                skipped += 1;
+                by_owner += 1;
+            }
+            Ok(Restore::SkippedSeqChanged) => skipped += 1,
+            _ => {}
         }
         if read(owner).as_deref() == Some(OTHER) {
             kept += 1;
@@ -270,8 +276,9 @@ fn h2_seq_under_open_vs_interleaving_writer() {
     }
     r.field("iterations", n)
         .field("restore_skipped", skipped)
+        .field("skipped_by_owner_check", by_owner)
         .field("other_data_kept", kept)
-        .field("old_order_fooled", fooled);
+        .field("seq_only_guard_fooled", fooled);
     let _ = put_items(owner, &[text_item(USER)]);
     let problems: Vec<&'static str> = if skipped == n && kept == n {
         Vec::new()
@@ -307,7 +314,7 @@ fn h3_listener_renders_before_paste() {
     std::thread::sleep(Duration::from_millis(QUIET_MS));
     let ctrl = dl.renders();
     r.field("renders_without_our_listener", renders_label(&ctrl));
-    let _ = clipboard::restore_snapshot(owner, expected_seq(put0, &ctrl), &user);
+    let _ = clipboard::restore_snapshot(owner, dl.hwnd, expected_seq(put0, &ctrl), &user);
 
     let lst = common::child(&r, "listener");
     std::thread::sleep(Duration::from_millis(200));
@@ -334,7 +341,7 @@ fn h3_listener_renders_before_paste() {
         .and_then(|(l, _)| child::event_field(l, "units"))
         .unwrap_or(-1);
     let restored = if decision != "paste" {
-        clipboard::restore_snapshot(owner, expected_seq(put1, &rs), &user)
+        clipboard::restore_snapshot(owner, dl.hwnd, expected_seq(put1, &rs), &user)
     } else {
         Ok(Restore::SkippedSeqChanged)
     };
@@ -394,7 +401,7 @@ fn h4_signal_after_paste_attributed_by_pid() {
     let early = dl.renders();
     r.field("renders_before_paste", renders_label(&early));
     if !early.is_empty() {
-        let _ = clipboard::restore_snapshot(owner, expected_seq(put, &early), &user);
+        let _ = clipboard::restore_snapshot(owner, dl.hwnd, expected_seq(put, &early), &user);
         return common::finish(
             &r,
             Status::Skip,
@@ -410,7 +417,7 @@ fn h4_signal_after_paste_attributed_by_pid() {
     let from_target = rs.iter().find(|x| x.requester_pid == tgt.pid).copied();
     let arrived = fixture::wait_until(Duration::from_secs(2), || fixture::get_text(h) == TEMP);
     let restored = if signal.is_some() && arrived.is_some() {
-        clipboard::restore_snapshot(owner, expected_seq(put, &rs), &user)
+        clipboard::restore_snapshot(owner, dl.hwnd, expected_seq(put, &rs), &user)
     } else {
         Ok(Restore::SkippedSeqChanged)
     };
@@ -510,7 +517,7 @@ fn h5_late_reader_no_blind_restore() {
         problems.push("late reader did not receive the temporary text");
     }
     // Clean-up = the user's explicit "restore clipboard" action (contract §4.1 p.5).
-    let _ = clipboard::restore_snapshot(owner, expected_seq(put, &rs), &user);
+    let _ = clipboard::restore_snapshot(owner, dl.hwnd, expected_seq(put, &rs), &user);
     common::verdict(&r, &problems);
 }
 
