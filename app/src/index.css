@@ -1,1 +1,206 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="system"][data-sys="dark"], [data-theme="system"][data-sys="dark"] *));
+
+/* Tokens: docs/research/design-system.md (v0.1). Values are copied 1:1; do not edit here without the designer. */
+@theme {
+  --color-*: initial;
+  --color-canvas: var(--ks-bg-canvas);
+  --color-surface: var(--ks-bg-surface);
+  --color-raised: var(--ks-bg-raised);
+  --color-overlay: var(--ks-bg-overlay);
+  --color-hover: var(--ks-bg-hover);
+  --color-selected: var(--ks-bg-selected);
+  --color-fg: var(--ks-fg-primary);
+  --color-fg-secondary: var(--ks-fg-secondary);
+  --color-fg-muted: var(--ks-fg-muted);
+  --color-fg-disabled: var(--ks-fg-disabled);
+  --color-border-subtle: var(--ks-border-subtle);
+  --color-border: var(--ks-border-default);
+  --color-border-strong: var(--ks-border-strong);
+  --color-accent: var(--ks-accent);
+  --color-accent-hover: var(--ks-accent-hover);
+  --color-accent-pressed: var(--ks-accent-pressed);
+  --color-on-accent: var(--ks-on-accent);
+  --color-accent-fg: var(--ks-accent-fg);
+  --color-focus: var(--ks-focus-ring);
+  --color-success: var(--ks-success-fg);
+  --color-success-bg: var(--ks-success-bg);
+  --color-warning: var(--ks-warning-fg);
+  --color-warning-bg: var(--ks-warning-bg);
+  --color-danger: var(--ks-danger-fg);
+  --color-danger-bg: var(--ks-danger-bg);
+  --color-info: var(--ks-info-fg);
+  --color-info-bg: var(--ks-info-bg);
+  --color-danger-solid: var(--ks-danger-solid);
+  --color-on-danger: var(--ks-on-danger);
+
+  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 20px;
+  --text-md: 14px;
+  --text-md--line-height: 20px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 36px;
+
+  --spacing: 4px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-1: var(--ks-shadow-1);
+  --shadow-2: var(--ks-shadow-2);
+  --shadow-3: var(--ks-shadow-3);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+}
+
+/* Dark is the default (also before settings load) to avoid a white flash. */
+:root {
+  color-scheme: dark;
+  --ks-bg-canvas: #0e1013;
+  --ks-bg-surface: #15181d;
+  --ks-bg-raised: #1c2027;
+  --ks-bg-overlay: #232831;
+  --ks-bg-hover: #2a303a;
+  --ks-bg-selected: #1e2b44;
+  --ks-border-subtle: #262b33;
+  --ks-border-default: #353c47;
+  --ks-border-strong: #6c7686;
+  --ks-fg-primary: #e7eaee;
+  --ks-fg-secondary: #aeb6c2;
+  --ks-fg-muted: #949daa;
+  --ks-fg-disabled: #5a626e;
+  --ks-accent: #2d6ad6;
+  --ks-accent-hover: #3572dd;
+  --ks-accent-pressed: #255dc0;
+  --ks-on-accent: #ffffff;
+  --ks-accent-fg: #7fb0ff;
+  --ks-focus-ring: #7fb0ff;
+  --ks-success-fg: #4cc38a;
+  --ks-success-bg: #13261c;
+  --ks-warning-fg: #e5a93d;
+  --ks-warning-bg: #2b2213;
+  --ks-danger-fg: #ff7b72;
+  --ks-danger-bg: #2e1716;
+  --ks-info-fg: #6cb6ff;
+  --ks-info-bg: #14233a;
+  --ks-danger-solid: #d23f3f;
+  --ks-on-danger: #ffffff;
+  --ks-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ks-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 0 0 1px #353c47;
+  --ks-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px #353c47;
+  --ks-scrim: rgba(0, 0, 0, 0.55);
+  --ks-dur-fast: 100ms;
+  --ks-dur-base: 160ms;
+  --ks-dur-slow: 240ms;
+}
+
+:root[data-theme="light"],
+:root[data-theme="system"][data-sys="light"] {
+  color-scheme: light;
+  --ks-bg-canvas: #f4f5f7;
+  --ks-bg-surface: #ffffff;
+  --ks-bg-raised: #ffffff;
+  --ks-bg-overlay: #ffffff;
+  --ks-bg-hover: #ebedf0;
+  --ks-bg-selected: #e3ecfd;
+  --ks-border-subtle: #e4e7eb;
+  --ks-border-default: #cdd2d9;
+  --ks-border-strong: #7d8796;
+  --ks-fg-primary: #16191e;
+  --ks-fg-secondary: #454d5a;
+  --ks-fg-muted: #5b6472;
+  --ks-fg-disabled: #a0a7b1;
+  --ks-accent: #1f5fcc;
+  --ks-accent-hover: #1a53b5;
+  --ks-accent-pressed: #16479c;
+  --ks-on-accent: #ffffff;
+  --ks-accent-fg: #1a56bd;
+  --ks-focus-ring: #1f5fcc;
+  --ks-success-fg: #18794a;
+  --ks-success-bg: #e6f4ec;
+  --ks-warning-fg: #8a5300;
+  --ks-warning-bg: #fbf1de;
+  --ks-danger-fg: #bf2a2a;
+  --ks-danger-bg: #fce9e8;
+  --ks-info-fg: #1a64a8;
+  --ks-info-bg: #e5f0fa;
+  --ks-danger-solid: #c42b2b;
+  --ks-on-danger: #ffffff;
+  --ks-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ks-shadow-2: 0 4px 12px rgba(16, 24, 40, 0.1), 0 0 0 1px #e4e7eb;
+  --ks-shadow-3: 0 12px 32px rgba(16, 24, 40, 0.16), 0 0 0 1px #cdd2d9;
+  --ks-scrim: rgba(16, 24, 40, 0.32);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--ks-bg-canvas);
+    color: var(--ks-fg-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 20px;
+  }
+  /* Outline (not box-shadow) so the ring survives forced-colors. */
+  :focus-visible {
+    outline: 2px solid var(--ks-focus-ring);
+    outline-offset: 2px;
+  }
+  dialog::backdrop {
+    background: var(--ks-scrim);
+  }
+}
+
+@keyframes ks-picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes ks-timeout {
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes ks-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes ks-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ks-dur-fast: 0ms;
+    --ks-dur-base: 0ms;
+    --ks-dur-slow: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
