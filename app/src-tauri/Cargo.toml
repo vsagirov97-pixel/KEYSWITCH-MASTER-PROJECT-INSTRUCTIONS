@@ -15,4 +15,12 @@ tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
 ks-core = { path = "../../crates/ks-core" }
+ks-engine = { path = "../../crates/ks-engine" }
+# serde / serde_json were already in the graph through Tauri; they are used directly for the
+# IPC types and the settings file.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 tauri = { version = "2.12.4", features = [] }
+
+[target.'cfg(windows)'.dependencies]
+ks-platform-win = { path = "../../crates/ks-platform-win" }

@@ -4,7 +4,8 @@
 //! exercise this crate): target fingerprint and generation gate, password / elevated /
 //! secure-desktop / self / console refusals, guarded UI Automation reads, write methods W1
 //! (`EM_REPLACESEL`, class `Edit` only, D-30) and W3 (`SendInput` with `KEYEVENTF_UNICODE`),
-//! keyboard layout switch and `RegisterHotKey` (D-14).
+//! keyboard layout switch and `RegisterHotKey` (D-14). Shell integration added for Beta 1:
+//! tray icon, HKCU `Run` autostart, single-instance guard, start-up hardening.
 //!
 //! Ground rules (CLAUDE.md, SECURITY_REVIEW):
 //! - no keyboard hooks, no injection into other processes, no thread-input attachment, no
@@ -39,6 +40,8 @@ pub mod instance;
 pub mod layout;
 #[cfg(windows)]
 pub mod process;
+#[cfg(windows)]
+pub mod tray;
 #[cfg(windows)]
 pub mod uia;
 

@@ -72,19 +72,25 @@ export interface KeySwitchApi {
 }
 
 function createApi(): KeySwitchApi {
-  const mock = createMockApi();
-  if (!isTauri()) return mock;
-  // Beta 1: the backend exposes only `core_version` so far. Remaining calls stay on the mock
-  // until the matching commands land (contract: docs/ui/beta1-ui-notes.md).
+  // Outside the Tauri shell (`npm run dev`, screenshots) the in-memory mock serves the UI.
+  if (!isTauri()) return createMockApi();
+  // Command names and shapes: docs/ui/beta1-ui-notes.md; Rust side: app/src-tauri/src/main.rs.
   return {
-    ...mock,
+    getSettings: () => invoke<Settings>("get_settings"),
+    setAutostart: (enabled) => invoke<void>("set_autostart", { enabled }),
+    setUiLanguage: (language) => invoke<void>("set_ui_language", { language }),
+    setTheme: (theme) => invoke<void>("set_theme", { theme }),
+    setHotkey: (hotkey) => invoke<HotkeyResult>("set_hotkey", { hotkey }),
+    listExcludedApps: () => invoke<ExcludedApp[]>("list_excluded_apps"),
+    addExcludedApp: (exe) => invoke<ExcludedApp[]>("add_excluded_app", { exe }),
+    removeExcludedApp: (exe) => invoke<ExcludedApp[]>("remove_excluded_app", { exe }),
     async getAppInfo() {
-      const info = await mock.getAppInfo();
-      const [version, coreVersion] = await Promise.all([
-        getVersion().catch(() => info.version),
-        invoke<string>("core_version").catch(() => info.coreVersion),
+      const [version, coreVersion, signed] = await Promise.all([
+        getVersion(),
+        invoke<string>("core_version"),
+        invoke<boolean>("build_signed"),
       ]);
-      return { ...info, version, coreVersion };
+      return { version, coreVersion, signed };
     },
   };
 }

@@ -15,6 +15,9 @@ skip() { RESULTS+=("SKIP  $1 ($2)"); }
 run "rustfmt"                cargo fmt --all --check
 run "clippy ks-core"         cargo clippy -p ks-core --all-targets -- -D warnings
 run "tests ks-core"          cargo test -p ks-core
+run "clippy ks-engine + ks-platform-win (host)" cargo clippy -p ks-engine -p ks-platform-win --all-targets -- -D warnings
+run "tests ks-engine + ks-platform-win (host)"  cargo test -p ks-engine -p ks-platform-win
+run "forbidden APIs guard"   bash scripts/check-forbidden-apis.sh
 if [ -d app/node_modules ]; then
   run "frontend typecheck"   npm --prefix app run typecheck
   run "frontend build"       npm --prefix app run build
@@ -22,6 +25,11 @@ else
   skip "frontend" "run: npm --prefix app ci"
 fi
 if [ "$QUICK" != "--quick" ]; then
+  if rustup target list --installed 2>/dev/null | grep -q x86_64-pc-windows-msvc; then
+    run "clippy ks-platform-win + ks-winprobe (windows target, check only)" cargo clippy -p ks-platform-win -p ks-winprobe --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+  else
+    skip "windows cross-check (platform crates)" "rustup target add x86_64-pc-windows-msvc"
+  fi
   if rustup target list --installed 2>/dev/null | grep -q x86_64-pc-windows-msvc && [ -d app/dist ]; then
     run "clippy app (windows target, check only)" cargo clippy -p keyswitch --target x86_64-pc-windows-msvc --all-targets -- -D warnings
   else

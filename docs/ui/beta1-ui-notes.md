@@ -21,11 +21,11 @@ Screenshots (mock backend, Chromium on Linux, 960x640 @2x — fonts differ from 
 
 Dev-only mock overrides: `?theme=dark|light|system&lang=ru|en`.
 
-## Backend contract still to implement (Rust)
+## Backend contract (Rust)
 
-Only `core_version` exists today; inside Tauri the UI uses it plus `getVersion()`, everything else
-is served by the mock **also inside the Tauri shell** — settings are not persisted and nothing is
-registered with the OS until these commands exist:
+Implemented in `app/src-tauri/src/main.rs` (BL-WIN-B1). Inside the Tauri shell `api.ts` calls these
+commands; the mock serves only `npm run dev`. Settings live in `%APPDATA%\KeySwitch\settings.json`;
+autostart state is read from the `HKCU` `Run` key (not stored in the file).
 
 | `KeySwitchApi` method | Proposed command | Notes |
 |---|---|---|
@@ -33,8 +33,8 @@ registered with the OS until these commands exist:
 | `setAutostart(bool)` | `set_autostart` | error → UI rolls the toggle back and shows an inline alert |
 | `setUiLanguage`, `setTheme` | `set_ui_language`, `set_theme` | tray menu must be rebuilt on language change |
 | `setHotkey(hotkey)` | `set_hotkey` | returns `{ok:true}` or `{ok:false,error:"invalid"\|"reserved"\|"conflict"}`; previous hotkey stays registered on failure |
-| `listExcludedApps` / `addExcludedApp` / `removeExcludedApp` | `list_/add_/remove_excluded_app` | backend must re-validate the exe name; `default` entries are not removable |
-| `getAppInfo` | `core_version` + `getVersion()` + `signed` flag | |
+| `listExcludedApps` / `addExcludedApp` / `removeExcludedApp` | `list_/add_/remove_excluded_app` | backend re-validates the exe name (invalid name → rejected promise); `default` entries are not removable |
+| `getAppInfo` | `core_version` + `getVersion()` + `build_signed` | `build_signed` returns `false` in Beta 1 (unsigned) |
 
 `OperationOutcome` / `RefusalReason` carry reason codes only — no type on the boundary can hold user text.
 

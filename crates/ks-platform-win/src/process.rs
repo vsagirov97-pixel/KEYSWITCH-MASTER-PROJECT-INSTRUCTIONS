@@ -101,6 +101,13 @@ unsafe fn token_rid(tok: HANDLE) -> Option<u32> {
     }
 }
 
+/// Local wall-clock time as `(hour, minute)` — for the "paused until HH:MM" tray label.
+pub fn local_hour_minute() -> (u16, u16) {
+    // SAFETY: returns a SYSTEMTIME by value; no parameters.
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    (t.wHour, t.wMinute)
+}
+
 /// Lower-cased executable file name of process `pid` (`notepad.exe`); `None` if unknown.
 pub fn exe_name(pid: u32) -> Option<String> {
     let mut buf = [0u16; 1024];

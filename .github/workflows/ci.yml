@@ -24,8 +24,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --all --check
-      - run: cargo clippy -p ks-core --all-targets -- -D warnings
-      - run: cargo test -p ks-core
+      - run: cargo clippy -p ks-core -p ks-engine -p ks-platform-win --all-targets -- -D warnings
+      - run: cargo test -p ks-core -p ks-engine -p ks-platform-win
 
   guardrails:
     # WS-08 (S-2a security review): forbidden Win32 APIs / probe-only helpers must not appear
@@ -126,10 +126,15 @@ jobs:
         if: always()
         shell: bash
         run: grep '"test":"h' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
-      - name: Publish KS-PROBE lines (i-z)
+      - name: Publish KS-PROBE lines (i)
         if: always()
         shell: bash
-        run: grep '"test":"[i-z]' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+        run: grep '"test":"i' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+      # Scenario j = Beta 1 product pipeline (ks-engine over ks-platform-win) on the fixture.
+      - name: Publish KS-PROBE lines (j-z)
+        if: always()
+        shell: bash
+        run: grep '"test":"[j-z]' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
 
   supply-chain:
     name: Supply chain
