@@ -54,15 +54,16 @@ struct Stat {
     refused: usize,
 }
 
-/// Minimum number of passing cases per category (measured on 065bc6d minus a small slack).
+/// Minimum number of passing cases per category (measured numbers minus a small slack).
 /// Categories not listed must pass completely.
 fn floor(category: &str, total: usize) -> usize {
     let percent = match category {
         // FLOORS-BEGIN (kept in sync with docs/qa/beta1-qa-report.md)
         "mixed_lang_fix" => 0, // language popup is not in Beta 1: always refused
-        "digits" => 80,        // measured 23/28 (QA-B1-02)
-        "keep_tech" => 85,     // measured 31/35 (QA-B1-01)
-        "punct_keys_en2ru" => 90, // measured 36/38 (QA-B1-03)
+        // Raised after the QA-B1-01..03 fixes on feat/win-beta1 (was 23/28, 31/35, 36/38).
+        "digits" => 95,           // measured 28/28
+        "keep_tech" => 95,        // measured 35/35
+        "punct_keys_en2ru" => 95, // measured 37/38 (`ytn?` -> `нет?`, expected `нет,`)
         _ => 100,
         // FLOORS-END
     };

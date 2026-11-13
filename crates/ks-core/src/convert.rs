@@ -144,11 +144,17 @@ impl Converter {
         let mut any_letters = false;
         let pieces = split_tokens(text);
         let sentence = is_sentence(&pieces);
+        // Number tokens whose separators the target layout reads differently (`3/14`):
+        // byte offset in `out.text` and the re-typed token, applied only if words convert.
+        let mut numbers: Vec<(usize, String)> = Vec::new();
         for piece in pieces {
             match piece {
                 Piece::Space(s) => out.text.push_str(s),
                 Piece::Token { text: tok, last } => {
                     if !tok.chars().any(|c| src.model.is_letter(c)) {
+                        if let Some(n) = number_separators(tok, src, tgt, last) {
+                            numbers.push((out.text.len(), n));
+                        }
                         out.text.push_str(tok);
                         out.kept_tokens += 1;
                         continue;
@@ -170,6 +176,14 @@ impl Converter {
         }
         if !any_letters || margin_sum < 0.0 {
             out.confidence = Confidence::Low;
+        }
+        if out.converted_tokens > 0 {
+            for (at, n) in numbers {
+                // Same length in bytes: only ASCII separators are swapped for ASCII ones.
+                out.text.replace_range(at..at + n.len(), &n);
+                out.converted_tokens += 1;
+                out.kept_tokens -= 1;
+            }
         }
         Ok(out)
     }
@@ -274,6 +288,40 @@ fn make_piece(s: &str, space: bool) -> Piece<'_> {
             last: false,
         }
     }
+}
+
+/// Separators a number may contain after conversion (decimal point, thousands, time).
+const NUMBER_SEPARATORS: [char; 3] = ['.', ',', ':'];
+
+/// A letterless token re-typed from `src` to `tgt`, if a key between digits gives a number
+/// separator in `tgt` (`3/14` -> `3.14`, `15^30` -> `15:30`; QA-B1-02). A `,` may also follow
+/// the last digit of a token inside the text (`3?` -> `3,`). `None` if nothing changes.
+fn number_separators(tok: &str, src: &Language, tgt: &Language, last: bool) -> Option<String> {
+    let chars: Vec<char> = tok.chars().collect();
+    let digit = |i: Option<usize>| {
+        i.and_then(|i| chars.get(i))
+            .is_some_and(|c| c.is_ascii_digit())
+    };
+    let mut out = chars.clone();
+    let mut changed = false;
+    for (i, &c) in chars.iter().enumerate() {
+        if !c.is_ascii_punctuation() || NUMBER_SEPARATORS.contains(&c) {
+            continue;
+        }
+        let Some(m) = src.layout.key_of(c).and_then(|k| tgt.layout.char_of(k)) else {
+            continue;
+        };
+        if !NUMBER_SEPARATORS.contains(&m) {
+            continue;
+        }
+        let between = digit(i.checked_sub(1)) && digit(Some(i + 1));
+        let trailing_comma = m == ',' && !last && i + 1 == chars.len() && digit(i.checked_sub(1));
+        if between || trailing_comma {
+            out[i] = m;
+            changed = true;
+        }
+    }
+    changed.then(|| out.into_iter().collect())
 }
 
 /// `true` if a letter touches a digit somewhere in `s` (`v1`, `0x`, `x86`, `a1b2`).

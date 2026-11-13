@@ -119,6 +119,22 @@ fn word_final_key_prefers_the_letter_of_a_dictionary_word() {
     check("ytn.", lang::EN, lang::RU, "нет.");
 }
 
+#[test]
+fn number_separators_follow_converted_words() {
+    // QA-B1-02: the key between digits is the target layout's separator.
+    check("xbckj 3/14", lang::EN, lang::RU, "число 3.14");
+    check("dthcbz 2/0", lang::EN, lang::RU, "версия 2.0");
+    check("d 15^30", lang::EN, lang::RU, "в 15:30");
+    check("'nf; 3? jabc 12", lang::EN, lang::RU, "этаж 3, офис 12");
+    // Without converted words the number is left as typed.
+    let c = conv().convert("3/14 15^30", lang::EN, lang::RU).unwrap();
+    assert_eq!(c.text, "3/14 15^30");
+    // Literal separators and technical tokens are not touched.
+    check("xbckj 3.14", lang::EN, lang::RU, "число 3.14");
+    check("ghbdtn 1/2/ 3", lang::EN, lang::RU, "привет 1.2/ 3");
+    check("Руддщ 3.14", lang::RU, lang::EN, "Hello 3.14");
+}
+
 // ---- RU -> EN ----
 
 #[test]
