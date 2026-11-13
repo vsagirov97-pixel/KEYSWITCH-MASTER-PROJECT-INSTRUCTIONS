@@ -1,7 +1,9 @@
 // The single boundary between the UI and the Rust backend.
 // Every backend call goes through `api`; components never import `@tauri-apps/api` themselves.
 //
-// By design no type here carries user text: outcomes are metadata only (kind + reason code).
+// By design no type here carries text from the user's applications: outcomes are metadata only
+// (kind + reason code). The one exception is the Macro Studio slot's `content`, which is the
+// user's own macro text typed in the editor (stored locally, never logged).
 
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -86,6 +88,48 @@ export type OperationOutcome =
   | { kind: "nothing" }
   | { kind: "refused"; reason: RefusalReason };
 
+/** Macro Studio (Beta 2 step 1): one slot, text macros only. */
+export type MacroType = "text";
+
+/** Upper bound of `MacroSlot.content`, in characters (backend: `ks_engine::MACRO_MAX_CHARS`). */
+export const MACRO_MAX_CHARS = 5000;
+
+/** The slot as the editor edits it (command `set_macro_slot`, argument `slot`). */
+export interface MacroSlot {
+  /** At most 64 characters, no control characters. */
+  name: string;
+  enabled: boolean;
+  /** `null` = no hotkey; same rules as the conversion hotkey and never the same combination. */
+  hotkey: Hotkey | null;
+  type: MacroType;
+  /**
+   * At most `MACRO_MAX_CHARS` characters. No control characters; `\n` and `\t` only with
+   * `allowEnterTab` (D-18). They are inserted as characters, never pressed as keys.
+   */
+  content: string;
+  /** D-18: off by default. */
+  allowEnterTab: boolean;
+}
+
+/** `get_macro_slot`: the slot plus backend facts. */
+export interface MacroSlotState extends MacroSlot {
+  /** The slot's hotkey is registered with Windows right now. */
+  registered: boolean;
+  /** Test run from the editor; `false` in this step (show the button disabled). */
+  testRunAvailable: boolean;
+}
+
+export type MacroSlotError =
+  | HotkeyError
+  | "name_invalid"
+  | "type_unsupported"
+  | "content_too_long"
+  | "content_forbidden_chars"
+  | "content_enter_tab_not_permitted"
+  /** The slot is active but could not be written to disk. */
+  | "save_failed";
+export type MacroSlotResult = { ok: true } | { ok: false; error: MacroSlotError };
+
 export interface KeySwitchApi {
   getSettings(): Promise<Settings>;
   /** Rejects when the OS autostart entry cannot be written. */
@@ -100,6 +144,9 @@ export interface KeySwitchApi {
   getAppInfo(): Promise<AppInfo>;
   /** `null` until the first operation since start. */
   getLastOperation(): Promise<LastOperation | null>;
+  getMacroSlot(): Promise<MacroSlotState>;
+  /** On failure the previous slot and its hotkey stay (except `save_failed`). */
+  setMacroSlot(slot: MacroSlot): Promise<MacroSlotResult>;
 }
 
 function createApi(): KeySwitchApi {
@@ -124,6 +171,8 @@ function createApi(): KeySwitchApi {
       return { version, coreVersion, signed };
     },
     getLastOperation: () => invoke<LastOperation | null>("last_operation"),
+    getMacroSlot: () => invoke<MacroSlotState>("get_macro_slot"),
+    setMacroSlot: (slot) => invoke<MacroSlotResult>("set_macro_slot", { slot }),
   };
 }
 

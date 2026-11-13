@@ -53,6 +53,35 @@ the boundary can hold user text.
   unconfirmed clipboard paste is held (D-26, at most 120 s). It is **not yet mirrored** in `app/src/tray/model.ts`.
 - The language-choice popup is a native OS window (keys 1 / 2 / Esc, 10 s), not the `LanguagePicker` component.
 
+### Macro Studio slot (backend, Beta 2 step 1 — `feat/win-beta2`)
+
+Contract only; the Macro Studio screen is the UI developer's task. One free slot, **text macros only**
+(JS / Python arrive with the sandbox, `feat/sandbox-win`). Stored in `settings.json` under `macroSlot`.
+
+| `KeySwitchApi` method | Command | Notes |
+|---|---|---|
+| `getMacroSlot` | `get_macro_slot` | `{ name, enabled, hotkey \| null, type: "text", content, allowEnterTab, registered, testRunAvailable }` |
+| `setMacroSlot(slot)` | `set_macro_slot` (argument `slot`) | `{ok:true}` or `{ok:false,error}`; on error the previous slot and its hotkey stay (except `save_failed`: active, not persisted) |
+
+- Errors: hotkey `invalid` / `reserved` / `conflict` (as for the conversion hotkey; the macro hotkey can never
+  equal the conversion hotkey — that is a `conflict` in both `set_hotkey` and `set_macro_slot`), `name_invalid`
+  (> 64 characters or control characters), `type_unsupported`, `content_too_long` (> 5000 characters,
+  `MACRO_MAX_CHARS`), `content_forbidden_chars` (control characters other than `\n` / `\t`, U+2028/2029,
+  bidi controls), `content_enter_tab_not_permitted` (`\n` or `\t` while `allowEnterTab` is off — D-18, default
+  off), `save_failed`.
+- `registered: false` with `enabled: true` and a hotkey means Windows refused the combination at start-up
+  (another app owns it): show the same "needs attention" state as for the conversion hotkey.
+- `testRunAvailable` is `false` in this step: show "Test run" disabled.
+- `content` is the user's own text: never put it into logs, telemetry or screenshots with real data.
+- Outcome of a macro run in `last_operation`: `kind: "inserted"`, `code` `MACRO_INSERTED` /
+  `MACRO_INSERTED_UNVERIFIED`; refusals use the same codes as conversion (`PASSWORD`, `EXCLUDED_APP`,
+  `FORBIDDEN_CHARS` — e.g. a text with line breaks where only typing is possible, `TOO_LONG`, …) plus
+  `NOT_AVAILABLE` (code macros; message key `status.reason.NOT_AVAILABLE` added, wording needs review).
+- How the text is written (no UI setting): a classic `Edit` gets it directly (`EM_REPLACESEL`, line breaks only
+  in multi-line fields); applications with a clipboard profile get a clipboard paste with the previous clipboard
+  restored; anything else is typed (`SendInput`, at most 200 characters, no `\n` / `\t`). Enter and Tab are
+  never pressed as keys. The keyboard layout is not switched.
+
 ## Deviations and simplest-option choices (need designer/owner confirmation)
 
 1. **Result toast vs design rule "no success notifications"** (design-concept §5.1, design-system §9.10:

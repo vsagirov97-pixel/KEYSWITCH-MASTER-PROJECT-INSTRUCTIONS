@@ -1,7 +1,19 @@
 // In-memory backend so the UI runs under `npm run dev` / `vite build` without the Rust side.
 // No storage, no network, no user text.
 
-import type { ExcludedApp, Hotkey, HotkeyResult, KeySwitchApi, Settings, Theme, UiLanguage } from "./api";
+import type {
+  ExcludedApp,
+  Hotkey,
+  HotkeyResult,
+  KeySwitchApi,
+  MacroSlot,
+  MacroSlotResult,
+  MacroSlotState,
+  Settings,
+  Theme,
+  UiLanguage,
+} from "./api";
+import { MACRO_MAX_CHARS } from "./api";
 import { version as appVersion } from "../package.json";
 import { MAX_MODIFIERS, MIN_MODIFIERS } from "./hotkey";
 
@@ -39,6 +51,14 @@ export function createMockApi(): KeySwitchApi {
     { exe: "cmd.exe", source: "default" },
   ];
   const snapshot = (): ExcludedApp[] => excluded.map((app) => ({ ...app }));
+  let macroSlot: MacroSlot = {
+    name: "",
+    enabled: false,
+    hotkey: null,
+    type: "text",
+    content: "",
+    allowEnterTab: false,
+  };
 
   return {
     async getSettings() {
@@ -81,6 +101,20 @@ export function createMockApi(): KeySwitchApi {
     },
     async getLastOperation() {
       return null;
+    },
+    async getMacroSlot(): Promise<MacroSlotState> {
+      const hotkey = macroSlot.hotkey ? { ...macroSlot.hotkey, modifiers: [...macroSlot.hotkey.modifiers] } : null;
+      return { ...macroSlot, hotkey, registered: macroSlot.enabled && hotkey !== null, testRunAvailable: false };
+    },
+    async setMacroSlot(slot: MacroSlot): Promise<MacroSlotResult> {
+      // A subset of the backend's checks, enough for the editor's states.
+      if ([...slot.content].length > MACRO_MAX_CHARS) return { ok: false, error: "content_too_long" };
+      if (/[\n\t]/.test(slot.content) && !slot.allowEnterTab) {
+        return { ok: false, error: "content_enter_tab_not_permitted" };
+      }
+      if (slot.hotkey && hotkeyId(slot.hotkey) === hotkeyId(settings.hotkey)) return { ok: false, error: "conflict" };
+      macroSlot = { ...slot, hotkey: slot.hotkey ? { ...slot.hotkey, modifiers: [...slot.hotkey.modifiers] } : null };
+      return { ok: true };
     },
   };
 }
