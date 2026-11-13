@@ -361,7 +361,10 @@ fn correct_text_is_low_confidence() {
         "Привет, как дела?",
         "это",
     ] {
-        assert_eq!(untouched(Field::all_selected(text)), "LOW_CONFIDENCE");
+        // D-31: a selection is converted key for key, even text that looks correct.
+        let mut f = Field::all_selected(text);
+        assert!(matches!(go(&mut f), Outcome::Converted { .. }));
+        assert!(f.content() != text);
         assert_eq!(untouched(Field::caret_at_end(text)), "LOW_CONFIDENCE");
     }
 }

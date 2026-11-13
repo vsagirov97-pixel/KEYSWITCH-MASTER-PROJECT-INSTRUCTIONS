@@ -41,6 +41,20 @@ pub enum Detection {
     Mixed(Vec<String>),
 }
 
+/// How a text is re-typed (D-31).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConvertMode {
+    /// Caret mode (last word): language-model choice for ambiguous punctuation, technical
+    /// tokens kept, number separators only next to converted words, `Low` confidence when
+    /// the original looks more plausible.
+    #[default]
+    Smart,
+    /// Selection mode: every character key-for-key through the layouts, no refusals. The
+    /// only exception: `.` `,` `:` between two digits stay (`v1.2.3` -> `м1.2.3`), because
+    /// a number cannot contain a letter.
+    Literal,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Confidence {
     High,
@@ -126,14 +140,34 @@ impl Converter {
         }
     }
 
-    /// Converts the whole text as typed in `from`'s layout into `to`.
+    /// Converts the whole text as typed in `from`'s layout into `to` ([`ConvertMode::Smart`]).
     /// Confidence is `Low` when the original looks more plausible than the result.
     pub fn convert(&self, text: &str, from: &str, to: &str) -> Result<Conversion, ConvertError> {
+        self.convert_with(text, from, to, ConvertMode::Smart)
+    }
+
+    /// As [`Converter::convert`] in the given mode. [`ConvertMode::Literal`] is `High` as
+    /// soon as the text has a letter of `from`.
+    pub fn convert_with(
+        &self,
+        text: &str,
+        from: &str,
+        to: &str,
+        mode: ConvertMode,
+    ) -> Result<Conversion, ConvertError> {
         let (f, t) = (self.lang(from)?, self.lang(to)?);
         if f == t {
             return Err(ConvertError::SameLanguage);
         }
         let (src, tgt) = (&self.langs[f], &self.langs[t]);
+        if mode == ConvertMode::Literal {
+            // Every token, letterless ones too (`3/14` -> `3.14` next to Russian words).
+            let mut out = literal(text, |tok| Some(literal_token(tok, src, tgt)));
+            if !text.chars().any(|c| src.model.is_letter(c)) {
+                out.confidence = Confidence::Low;
+            }
+            return Ok(out);
+        }
         let mut out = Conversion {
             text: String::with_capacity(text.len()),
             confidence: Confidence::High,
@@ -189,10 +223,27 @@ impl Converter {
     }
 
     /// Mixed text: converts tokens not written in `to` into `to`, keeping tokens that are
-    /// already `to` or look like genuine words of their own language.
+    /// already `to` or look like genuine words of their own language ([`ConvertMode::Smart`]).
     pub fn convert_mixed(&self, text: &str, to: &str) -> Result<Conversion, ConvertError> {
+        self.convert_mixed_with(text, to, ConvertMode::Smart)
+    }
+
+    /// As [`Converter::convert_mixed`] in the given mode. [`ConvertMode::Literal`] re-types
+    /// every token whose letters are mostly of another language, key for key.
+    pub fn convert_mixed_with(
+        &self,
+        text: &str,
+        to: &str,
+        mode: ConvertMode,
+    ) -> Result<Conversion, ConvertError> {
         let t = self.lang(to)?;
         let tgt = &self.langs[t];
+        if mode == ConvertMode::Literal {
+            return Ok(literal(text, |tok| {
+                self.dominant_foreign(tok, t)
+                    .map(|s| literal_token(tok, &self.langs[s], tgt))
+            }));
+        }
         let mut out = Conversion {
             text: String::with_capacity(text.len()),
             confidence: Confidence::High,
@@ -246,6 +297,56 @@ impl Converter {
         }
         best.map(|(i, _)| i)
     }
+}
+
+/// Literal conversion of `text`: `convert(token)` gives the re-typed token or `None` to keep
+/// it. `High` if any token was converted.
+fn literal(text: &str, convert: impl Fn(&str) -> Option<String>) -> Conversion {
+    let mut out = Conversion {
+        text: String::with_capacity(text.len()),
+        confidence: Confidence::Low,
+        converted_tokens: 0,
+        kept_tokens: 0,
+    };
+    for piece in split_tokens(text) {
+        match piece {
+            Piece::Space(s) => out.text.push_str(s),
+            Piece::Token { text: tok, .. } => match convert(tok) {
+                Some(t) => {
+                    out.text.push_str(&t);
+                    out.converted_tokens += 1;
+                    out.confidence = Confidence::High;
+                }
+                None => {
+                    out.text.push_str(tok);
+                    out.kept_tokens += 1;
+                }
+            },
+        }
+    }
+    out
+}
+
+/// `tok` re-typed key for key from `src` to `tgt`; `.` `,` `:` between digits stay.
+fn literal_token(tok: &str, src: &Language, tgt: &Language) -> String {
+    let chars: Vec<char> = tok.chars().collect();
+    let digit = |i: Option<usize>| {
+        i.and_then(|i| chars.get(i))
+            .is_some_and(char::is_ascii_digit)
+    };
+    chars
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| {
+            if NUMBER_SEPARATORS.contains(&c) && digit(i.checked_sub(1)) && digit(Some(i + 1)) {
+                return c;
+            }
+            src.layout
+                .key_of(c)
+                .and_then(|k| tgt.layout.char_of(k))
+                .unwrap_or(c)
+        })
+        .collect()
 }
 
 enum Piece<'a> {

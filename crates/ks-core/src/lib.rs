@@ -7,7 +7,9 @@ mod convert;
 mod layout;
 mod model;
 
-pub use convert::{Confidence, Conversion, ConvertError, Converter, Detection, Language};
+pub use convert::{
+    Confidence, Conversion, ConvertError, ConvertMode, Converter, Detection, Language,
+};
 pub use layout::{KeyStroke, Layout, LayoutError, ScanCode};
 pub use model::LanguageModel;
 

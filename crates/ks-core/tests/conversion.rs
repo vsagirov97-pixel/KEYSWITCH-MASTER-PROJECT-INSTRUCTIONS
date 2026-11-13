@@ -1,6 +1,6 @@
 //! Conversion corpus: PRD FR-CONV-3 acceptance cases and edge cases.
 
-use ks_core::{Confidence, Converter, Detection, builtin, lang};
+use ks_core::{Confidence, ConvertMode, Converter, Detection, builtin, lang};
 use std::sync::OnceLock;
 
 fn conv() -> &'static Converter {
@@ -133,6 +133,63 @@ fn number_separators_follow_converted_words() {
     check("xbckj 3.14", lang::EN, lang::RU, "число 3.14");
     check("ghbdtn 1/2/ 3", lang::EN, lang::RU, "привет 1.2/ 3");
     check("Руддщ 3.14", lang::RU, lang::EN, "Hello 3.14");
+}
+
+fn literal(input: &str, from: &str, to: &str, expected: &str) {
+    let c = conv()
+        .convert_with(input, from, to, ConvertMode::Literal)
+        .unwrap();
+    assert_eq!(c.text, expected, "input: {input:?}");
+    assert_eq!(c.confidence, Confidence::High, "input: {input:?}");
+}
+
+#[test]
+fn literal_mode_converts_key_for_key_without_refusals() {
+    // D-31: selection mode.
+    literal("м1.2.3", lang::RU, lang::EN, "v1.2.3");
+    literal("v1.2.3", lang::EN, lang::RU, "м1.2.3");
+    literal("ltkf.", lang::EN, lang::RU, "делаю");
+    literal("0xFF", lang::EN, lang::RU, "0чАА");
+    literal("x86_64", lang::EN, lang::RU, "ч86_64");
+    literal("hello", lang::EN, lang::RU, "руддщ");
+    literal("xbckj 3/14", lang::EN, lang::RU, "число 3.14");
+    literal("d 15^30", lang::EN, lang::RU, "в 15:30");
+    literal("Ghbdtn? rfr ltkf&", lang::EN, lang::RU, "Привет, как дела?");
+    literal(
+        "Cgfcb,j pf gjvjom.",
+        lang::EN,
+        lang::RU,
+        "Спасибо за помощью",
+    );
+    literal("Руддщб цщкдв!", lang::RU, lang::EN, "Hello, world!");
+    // Without letters of the source language there is nothing to be confident about.
+    let c = conv()
+        .convert_with("3/14", lang::EN, lang::RU, ConvertMode::Literal)
+        .unwrap();
+    assert_eq!(c.confidence, Confidence::Low);
+    // Mixed selection (language picked in the popup): foreign tokens key for key.
+    let m = conv()
+        .convert_mixed_with("привет vbh v1.2.3", lang::RU, ConvertMode::Literal)
+        .unwrap();
+    assert_eq!(m.text, "привет мир м1.2.3");
+}
+
+#[test]
+fn smart_mode_keeps_its_protections() {
+    // D-31: caret mode is unchanged.
+    for tok in ["v1.2.3", "м1.2.3"] {
+        let from = if tok.starts_with('v') {
+            lang::EN
+        } else {
+            lang::RU
+        };
+        let to = if from == lang::EN { lang::RU } else { lang::EN };
+        let c = conv()
+            .convert_with(tok, from, to, ConvertMode::Smart)
+            .unwrap();
+        assert_eq!(c.text, tok);
+        assert_eq!(c.confidence, Confidence::Low);
+    }
 }
 
 // ---- RU -> EN ----

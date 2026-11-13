@@ -11,7 +11,7 @@ mod user_text;
 
 pub use user_text::{UserText, wipe};
 
-use ks_core::{Confidence, Converter, Detection};
+use ks_core::{Confidence, ConvertMode, Converter, Detection};
 
 /// Why an operation was refused before anything was changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -333,13 +333,20 @@ fn run_inner<P: Platform>(
     if source.utf16_len() > config.max_units {
         return Err(Stop::Refused(Refusal::TooLong));
     }
+    // D-31: a selection is re-typed key for key; the last word before the caret is guessed
+    // with the language model and its protections.
+    let mode = if by_caret {
+        ConvertMode::Smart
+    } else {
+        ConvertMode::Literal
+    };
 
     let (to, converted) = match converter.detect(source.expose()) {
         Detection::NoLetters => return Ok(Outcome::Nothing),
         Detection::Mixed(_) => {
             // Letters of several languages: only the user knows which one was meant.
             let to = ask(platform, converter, Refusal::Mixed)?;
-            let Ok(conversion) = converter.convert_mixed(source.expose(), &to) else {
+            let Ok(conversion) = converter.convert_mixed_with(source.expose(), &to, mode) else {
                 return Ok(Outcome::Nothing);
             };
             (to, UserText::new(conversion.text))
@@ -352,7 +359,7 @@ fn run_inner<P: Platform>(
             else {
                 return Ok(Outcome::Nothing);
             };
-            let Ok(conversion) = converter.convert(source.expose(), &from, &to) else {
+            let Ok(conversion) = converter.convert_with(source.expose(), &from, &to, mode) else {
                 return Ok(Outcome::Nothing);
             };
             let confidence = conversion.confidence;
@@ -364,7 +371,8 @@ fn run_inner<P: Platform>(
                     return Ok(Outcome::Nothing);
                 }
                 if picked != to {
-                    let Ok(other) = converter.convert(source.expose(), &from, &picked) else {
+                    let Ok(other) = converter.convert_with(source.expose(), &from, &picked, mode)
+                    else {
                         return Ok(Outcome::Nothing);
                     };
                     (picked, UserText::new(other.text))
@@ -546,10 +554,26 @@ mod tests {
     }
 
     #[test]
+    fn selection_is_literal_and_caret_word_is_smart() {
+        // D-31.
+        let mut f = Fake::new("v1.2.3", (0, 6));
+        f.choice = Choice::Cancelled;
+        assert_eq!(go(&mut f), OK);
+        assert_eq!((f.content().as_str(), f.asked), ("м1.2.3", 0));
+        let mut f = Fake::new("ltkf.", (0, 5));
+        assert_eq!(go(&mut f), OK);
+        assert_eq!(f.content(), "делаю");
+        let mut f = Fake::caret_at_end("v1.2.3");
+        assert_eq!(go(&mut f), Outcome::Refused(Refusal::LowConfidence));
+        assert_eq!(f.content(), "v1.2.3");
+    }
+
+    #[test]
     fn dismissed_choice_cancels_without_writing() {
-        for text in ["привет", "привет ghbdtn"] {
-            let n = text.encode_utf16().count();
-            let mut f = Fake::new(text, (0, n));
+        // A caret word of low confidence and a mixed selection both ask (D-31: a single-
+        // language selection is converted key for key without asking).
+        for (text, sel) in [("привет", (6, 6)), ("привет ghbdtn", (0, 13))] {
+            let mut f = Fake::new(text, sel);
             f.choice = Choice::Cancelled;
             assert_eq!(go(&mut f), Outcome::Cancelled);
             assert_eq!(f.writes, 0);
