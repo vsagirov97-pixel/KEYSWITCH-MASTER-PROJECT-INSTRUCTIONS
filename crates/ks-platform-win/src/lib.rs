@@ -13,17 +13,20 @@
 //! - user text is never logged or formatted; errors carry API names and codes only;
 //! - this is the only product crate with `unsafe`; every block has a `// SAFETY:` comment.
 //!
-//! The W2 clipboard method (D-26 contract, verified in S-2b) is deliberately **not** part of
-//! Beta 1: no application profile enables it yet.
+//! The W2 clipboard method ([`clipboard`], [`w2`]; D-26 / CISO Q-1 contract, verified in S-2b)
+//! is used only for applications listed in the [`profiles`] table.
 //!
-//! On non-Windows targets only [`policy`] (pure functions) is compiled.
+//! On non-Windows targets only [`policy`] and [`profiles`] (pure code and data) are compiled.
 
 pub mod policy;
+pub mod profiles;
 
 #[cfg(windows)]
 pub mod adapter;
 #[cfg(windows)]
 pub mod autostart;
+#[cfg(windows)]
+pub mod clipboard;
 #[cfg(windows)]
 pub mod desktop;
 #[cfg(windows)]
@@ -44,6 +47,8 @@ pub mod process;
 pub mod tray;
 #[cfg(windows)]
 pub mod uia;
+#[cfg(windows)]
+pub mod w2;
 
 #[cfg(windows)]
 pub use hwnd::Hwnd;

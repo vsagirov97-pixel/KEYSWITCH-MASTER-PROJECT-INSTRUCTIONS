@@ -25,12 +25,15 @@ use windows::Win32::System::Memory::{
 use windows::Win32::System::Ole::{CF_LOCALE, CF_OEMTEXT, CF_TEXT, CF_UNICODETEXT};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetWindowThreadProcessId,
-    IsHungAppWindow, MSG, PostQuitMessage, RegisterClassW, TranslateMessage, WINDOW_EX_STYLE,
-    WM_CLOSE, WM_DESTROY, WM_RENDERALLFORMATS, WM_RENDERFORMAT, WNDCLASSW, WS_POPUP,
+    IsHungAppWindow, MSG, PostQuitMessage, RegisterClassW, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE, WM_DESTROY, WM_NULL, WM_RENDERALLFORMATS,
+    WM_RENDERFORMAT, WNDCLASSW, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
-use crate::fixture::Hwnd;
+use ks_engine::UserText;
+
+use crate::Hwnd;
 
 /// Upper bound for a snapshot (SYSTEM_ARCHITECTURE §4.1: 16 MB).
 pub const SNAPSHOT_LIMIT_BYTES: usize = 16 * 1024 * 1024;
@@ -85,6 +88,33 @@ pub fn owner_hwnd() -> Hwnd {
     unsafe { GetClipboardOwner() }
         .map(Hwnd::from_raw)
         .unwrap_or(Hwnd::from_isize(0))
+}
+
+/// Process that owns window `h` (0 = unknown / NULL handle).
+pub fn window_pid(h: Hwnd) -> u32 {
+    let mut pid = 0u32;
+    if !h.is_null() {
+        // SAFETY: `pid` is a valid out-parameter; a stale handle only yields 0.
+        unsafe { GetWindowThreadProcessId(h.raw(), Some(&mut pid)) };
+    }
+    pid
+}
+
+/// `WM_NULL` with `SMTO_ABORTIFHUNG`: `true` if the window's thread answered in time.
+fn ping(h: Hwnd, timeout_ms: u32) -> bool {
+    // SAFETY: WM_NULL carries no parameters; the result is not used.
+    unsafe {
+        SendMessageTimeoutW(
+            h.raw(),
+            WM_NULL,
+            WPARAM(0),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG,
+            timeout_ms,
+            None,
+        )
+    }
+    .0 != 0
 }
 
 /// Current clipboard sequence number (0 = no WINSTA_ACCESSCLIPBOARD).
@@ -245,7 +275,8 @@ pub fn put_items(open: &Open, items: &[(u32, Vec<u8>)]) -> Result<u32, String> {
     Ok(seq())
 }
 
-/// Reads CF_UNICODETEXT. Test-only, used on synthetic content to verify restore.
+/// Reads CF_UNICODETEXT into a plain `String`. For tests on synthetic content only; the
+/// product reads through [`read_text_guarded`], which yields `UserText`.
 pub fn read_text(_open: &Open) -> Option<String> {
     let bytes = read_bytes(u32::from(CF_UNICODETEXT.0))?;
     let units: Vec<u16> = bytes
@@ -298,6 +329,16 @@ impl Snapshot {
     /// `true` if every item of `self` is present with identical bytes in `other`.
     pub fn subset_of(&self, other: &Snapshot) -> bool {
         self.items.iter().all(|(f, b)| other.bytes_equal(*f, b))
+    }
+}
+
+impl Drop for Snapshot {
+    fn drop(&mut self) {
+        // The snapshot is the user's clipboard: overwrite it before freeing (SEC-11).
+        for (_, bytes) in &mut self.items {
+            bytes.fill(0);
+        }
+        std::hint::black_box(&self.items);
     }
 }
 
@@ -363,7 +404,7 @@ pub fn snapshot_guarded(
         // SAFETY: trivial query on a window handle (a stale handle yields FALSE).
         let hung = unsafe { IsHungAppWindow(o.raw()) }.as_bool();
         let ping_ms = (deadline.as_millis() as u32).min(100);
-        if hung || !crate::fixture::ping(o, ping_ms) {
+        if hung || !ping(o, ping_ms) {
             return (Err(SnapRefusal::OwnerUnresponsive), None);
         }
     }
@@ -382,6 +423,50 @@ pub fn snapshot_guarded(
         Ok(r) => (r, Some(worker)),
         Err(_) => (Err(SnapRefusal::Deadline), Some(worker)),
     }
+}
+
+/// What a guarded read of the target's copy found.
+pub struct CopyRead {
+    /// CF_UNICODETEXT, cut to the requested number of units; `None` if absent.
+    pub text: Option<UserText>,
+    /// Window that owned the clipboard while it was read.
+    pub owner: Hwnd,
+    /// Sequence number right after the read, still under `OpenClipboard`.
+    pub seq_after: u32,
+}
+
+/// Reads at most `max_units` UTF-16 units of CF_UNICODETEXT on a worker thread, never
+/// blocking the caller beyond `deadline` (the owner may hang while rendering, XR-04).
+/// `None` = the clipboard could not be opened or the read did not finish in time.
+pub fn read_text_guarded(deadline: Duration, max_units: usize) -> Option<CopyRead> {
+    let (tx, rx) = mpsc::channel::<Option<CopyRead>>();
+    std::thread::spawn(move || {
+        let res = open_for(None, deadline).ok().map(|_open| {
+            let owner = owner_hwnd();
+            let text = read_bytes(u32::from(CF_UNICODETEXT.0)).map(|mut bytes| {
+                let units: Vec<u16> = bytes
+                    .chunks_exact(2)
+                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .take_while(|&u| u != 0)
+                    .take(max_units)
+                    .collect();
+                bytes.fill(0);
+                std::hint::black_box(&bytes);
+                let text = UserText::new(String::from_utf16_lossy(&units));
+                let mut units = units;
+                units.fill(0);
+                std::hint::black_box(&units);
+                text
+            });
+            CopyRead {
+                text,
+                owner,
+                seq_after: seq(),
+            }
+        });
+        let _ = tx.send(res);
+    });
+    rx.recv_timeout(deadline).ok().flatten()
 }
 
 /// Outcome of a guarded restore.
@@ -461,7 +546,7 @@ pub struct Render {
 }
 
 struct OwnerState {
-    payload: String,
+    payload: UserText,
     t0: Instant,
     renders: Vec<Render>,
     render_all: u32,
@@ -488,7 +573,7 @@ impl DelayedOwner {
     pub fn spawn() -> Result<Self, String> {
         let (tx, rx) = mpsc::channel::<Result<Hwnd, String>>();
         let join = std::thread::Builder::new()
-            .name("ks-winprobe-clip-owner".into())
+            .name("ks-clip-owner".into())
             .spawn(move || {
                 let r = create_owner_window();
                 let ok = r.is_ok();
@@ -513,7 +598,7 @@ impl DelayedOwner {
     /// `CloseClipboard` (see [`commit`]).
     pub fn put_delayed(&self, text: &str, private: bool) -> Result<u32, String> {
         *owner_state() = Some(OwnerState {
-            payload: text.to_owned(),
+            payload: UserText::new(text.to_owned()),
             t0: Instant::now(),
             renders: Vec::new(),
             render_all: 0,
@@ -524,6 +609,21 @@ impl DelayedOwner {
         set_delayed(u32::from(CF_UNICODETEXT.0))?;
         put_privacy(private)?;
         Ok(commit(o))
+    }
+
+    /// Replaces the delayed text with real data (plus the D-13 markers) if this window still
+    /// owns the clipboard, so the text survives this owner. Returns the sequence number after
+    /// `CloseClipboard`; `None` if someone else owns the clipboard now or the put failed.
+    pub fn materialize(&self) -> Option<u32> {
+        let o = open(self.hwnd).ok()?;
+        if owner_hwnd() != self.hwnd {
+            return None;
+        }
+        let guard = owner_state();
+        let payload = &guard.as_ref()?.payload;
+        put_text(&o, payload.expose(), true).ok()?;
+        drop(guard);
+        Some(commit(o))
     }
 
     /// Renders received so far.
@@ -565,7 +665,7 @@ impl Drop for DelayedOwner {
     }
 }
 
-const OWNER_CLASS_NAME: PCWSTR = w!("KsWinProbeClipOwner");
+const OWNER_CLASS_NAME: PCWSTR = w!("KeySwitchClipOwner");
 
 fn create_owner_window() -> Result<Hwnd, String> {
     // SAFETY: NULL module name = handle of the current executable.
@@ -587,7 +687,7 @@ fn create_owner_window() -> Result<Hwnd, String> {
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             OWNER_CLASS_NAME,
-            w!("KeySwitch probe clipboard owner"),
+            w!("KeySwitch clipboard owner"),
             WS_POPUP,
             0,
             0,
@@ -634,7 +734,7 @@ extern "system" fn owner_wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: L
             }
             let mut guard = owner_state();
             if let Some(st) = guard.as_mut() {
-                let rendered = render_text(format, &st.payload).is_ok();
+                let rendered = render_text(format, st.payload.expose()).is_ok();
                 st.renders.push(Render {
                     at_ms: st.t0.elapsed().as_millis() as u64,
                     format,

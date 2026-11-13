@@ -39,6 +39,11 @@ pub enum Refusal {
     Unsupported,
     /// The text contains characters the write method must not inject (`\n`, `\t`, bidi...).
     ForbiddenChars,
+    /// The clipboard method is needed but the clipboard cannot be used safely now (foreign
+    /// formats, size, unresponsive owner, remote session). Nothing was touched.
+    Clipboard,
+    /// Another program touched the clipboard during the operation; it was aborted.
+    ClipboardListener,
 }
 
 /// Why a started operation stopped. Nothing is written after a failure.
@@ -103,6 +108,8 @@ impl Outcome {
                 Refusal::Mixed => "MIXED",
                 Refusal::Unsupported => "UNSUPPORTED",
                 Refusal::ForbiddenChars => "FORBIDDEN_CHARS",
+                Refusal::Clipboard => "CLIPBOARD_UNAVAILABLE",
+                Refusal::ClipboardListener => "CLIPBOARD_LISTENER",
             },
             Outcome::Failed(f) => match f {
                 Failure::TargetChanged => "TARGET_CHANGED",

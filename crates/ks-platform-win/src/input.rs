@@ -10,7 +10,7 @@
 use crate::policy::CharClass;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
-    KEYEVENTF_UNICODE, SendInput, VIRTUAL_KEY, VK_RETURN,
+    KEYEVENTF_UNICODE, SendInput, VIRTUAL_KEY, VK_CONTROL, VK_RETURN,
 };
 
 /// Max UTF-16 units per batch (each unit = key down + key up = 2 INPUT events).
@@ -156,6 +156,47 @@ fn send_batches(
         }
     }
     Ok(events)
+}
+
+/// The only two key chords the product ever injects (W2). Deliberately not a generic
+/// virtual-key sender (WS-07).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Chord {
+    /// Ctrl+C.
+    Copy,
+    /// Ctrl+V.
+    Paste,
+}
+
+/// Events in one chord: Ctrl down, letter down, letter up, Ctrl up.
+pub const CHORD_EVENTS: u32 = 4;
+
+/// Injects `chord`; returns the number of events injected (of [`CHORD_EVENTS`]).
+pub fn send_chord(chord: Chord) -> u32 {
+    let letter = VIRTUAL_KEY(match chord {
+        Chord::Copy => 0x43,
+        Chord::Paste => 0x56,
+    });
+    let vk = |vk: VIRTUAL_KEY, flags: KEYBD_EVENT_FLAGS| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let events = [
+        vk(VK_CONTROL, KEYBD_EVENT_FLAGS(0)),
+        vk(letter, KEYBD_EVENT_FLAGS(0)),
+        vk(letter, KEYEVENTF_KEYUP),
+        vk(VK_CONTROL, KEYEVENTF_KEYUP),
+    ];
+    // SAFETY: four fully initialised keyboard INPUTs; cbSize is the size of one INPUT.
+    unsafe { SendInput(&events, std::mem::size_of::<INPUT>() as i32) }
 }
 
 #[cfg(test)]

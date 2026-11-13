@@ -24,7 +24,7 @@ pub use ks_platform_win::policy;
 #[cfg(windows)]
 pub mod child;
 #[cfg(windows)]
-pub mod clipboard;
+pub use ks_platform_win::clipboard;
 #[cfg(windows)]
 pub use ks_platform_win::desktop;
 #[cfg(windows)]
