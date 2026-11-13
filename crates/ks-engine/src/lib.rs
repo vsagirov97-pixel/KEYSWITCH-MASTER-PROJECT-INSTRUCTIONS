@@ -1,6 +1,7 @@
 //! KeySwitch operation pipeline (Beta 1: conversion only).
 //!
-//! `hotkey → gate → read → detect/convert → write → post-check → switch layout`.
+//! `hotkey → gate → read → detect/convert → (language choice) → write → post-check → switch
+//! layout`.
 //!
 //! This crate has no OS dependencies and no `unsafe`: everything system-specific sits behind
 //! the [`Platform`] trait (implemented by `ks-platform-win`). Results are codes only — no type
@@ -31,9 +32,9 @@ pub enum Refusal {
     ReadOnly,
     /// The text is longer than the limit.
     TooLong,
-    /// The converter is not confident; without a language popup the engine refuses.
+    /// The converter is not confident and the platform could not ask the user.
     LowConfidence,
-    /// Letters of several languages; needs the user's choice (popup not in Beta 1).
+    /// Letters of several languages and the platform could not ask the user.
     Mixed,
     /// No usable text interface in the focused control.
     Unsupported,
@@ -66,6 +67,19 @@ pub enum Stop {
     Refused(Refusal),
     /// A step failed.
     Failed(Failure),
+    /// The user dismissed the language choice (Esc or timeout).
+    Cancelled,
+}
+
+/// Answer of the platform's language-choice popup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Choice {
+    /// The platform cannot ask (no popup); the engine refuses as before.
+    Unavailable,
+    /// Esc, timeout, or the target changed while the popup was open.
+    Cancelled,
+    /// Index into the offered languages.
+    Picked(usize),
 }
 
 /// Result of one operation. Metadata only.
@@ -84,6 +98,8 @@ pub enum Outcome {
     Refused(Refusal),
     /// Stopped by a failure.
     Failed(Failure),
+    /// The user dismissed the language choice; nothing was changed.
+    Cancelled,
 }
 
 impl Outcome {
@@ -95,6 +111,7 @@ impl Outcome {
                 verified: false, ..
             } => "CONVERTED_UNVERIFIED",
             Outcome::Nothing => "NOTHING",
+            Outcome::Cancelled => "CANCELLED",
             Outcome::Refused(r) => match r {
                 Refusal::Password => "PASSWORD",
                 Refusal::Elevated => "ELEVATED",
@@ -147,6 +164,13 @@ pub trait Platform {
     fn verify(&mut self, expected: &UserText) -> bool;
     /// Asks the target to switch to the keyboard layout of language `lang` (`"ru"`, `"en"`).
     fn switch_layout(&mut self, lang: &str) -> bool;
+    /// Asks the user which of `langs` the text should become (low confidence or mixed
+    /// text). Must not show or keep the text. Nothing has been written yet; the write that
+    /// follows re-checks the target and the operation generation.
+    fn choose_language(&mut self, langs: &[&str]) -> Choice {
+        let _ = langs;
+        Choice::Unavailable
+    }
 }
 
 /// Policy knobs of one operation.
@@ -216,6 +240,21 @@ pub fn run<P: Platform>(platform: &mut P, converter: &Converter, config: &Config
         Ok(outcome) => outcome,
         Err(Stop::Refused(r)) => Outcome::Refused(r),
         Err(Stop::Failed(f)) => Outcome::Failed(f),
+        Err(Stop::Cancelled) => Outcome::Cancelled,
+    }
+}
+
+/// The language the user picked, or the stop that ends the operation.
+fn ask<P: Platform>(
+    platform: &mut P,
+    converter: &Converter,
+    unavailable: Refusal,
+) -> Result<String, Stop> {
+    let langs: Vec<&str> = converter.languages().collect();
+    match platform.choose_language(&langs) {
+        Choice::Picked(i) => langs.get(i).map(|l| (*l).to_owned()).ok_or(Stop::Cancelled),
+        Choice::Cancelled => Err(Stop::Cancelled),
+        Choice::Unavailable => Err(Stop::Refused(unavailable)),
     }
 }
 
@@ -251,26 +290,48 @@ fn run_inner<P: Platform>(
         return Err(Stop::Refused(Refusal::TooLong));
     }
 
-    let from = match converter.detect(source.expose()) {
+    let (to, converted) = match converter.detect(source.expose()) {
         Detection::NoLetters => return Ok(Outcome::Nothing),
-        Detection::Mixed(_) => return Err(Stop::Refused(Refusal::Mixed)),
-        Detection::Single(lang) => lang,
+        Detection::Mixed(_) => {
+            // Letters of several languages: only the user knows which one was meant.
+            let to = ask(platform, converter, Refusal::Mixed)?;
+            let Ok(conversion) = converter.convert_mixed(source.expose(), &to) else {
+                return Ok(Outcome::Nothing);
+            };
+            (to, UserText::new(conversion.text))
+        }
+        Detection::Single(from) => {
+            let Some(to) = converter
+                .languages()
+                .find(|l| *l != from)
+                .map(str::to_owned)
+            else {
+                return Ok(Outcome::Nothing);
+            };
+            let Ok(conversion) = converter.convert(source.expose(), &from, &to) else {
+                return Ok(Outcome::Nothing);
+            };
+            let confidence = conversion.confidence;
+            let converted = UserText::new(conversion.text);
+            if confidence == Confidence::Low {
+                let picked = ask(platform, converter, Refusal::LowConfidence)?;
+                if picked == from {
+                    // The user confirms the text is already in the right language.
+                    return Ok(Outcome::Nothing);
+                }
+                if picked != to {
+                    let Ok(other) = converter.convert(source.expose(), &from, &picked) else {
+                        return Ok(Outcome::Nothing);
+                    };
+                    (picked, UserText::new(other.text))
+                } else {
+                    (to, converted)
+                }
+            } else {
+                (to, converted)
+            }
+        }
     };
-    let Some(to) = converter
-        .languages()
-        .find(|l| *l != from)
-        .map(str::to_owned)
-    else {
-        return Ok(Outcome::Nothing);
-    };
-    let Ok(conversion) = converter.convert(source.expose(), &from, &to) else {
-        return Ok(Outcome::Nothing);
-    };
-    let confidence = conversion.confidence;
-    let converted = UserText::new(conversion.text);
-    if confidence == Confidence::Low {
-        return Err(Stop::Refused(Refusal::LowConfidence));
-    }
     if converted.same_as(&source) {
         return Ok(Outcome::Nothing);
     }
@@ -310,6 +371,9 @@ mod tests {
         write_error: Option<Stop>,
         /// Simulates a target whose text cannot be re-read after the write.
         blind: bool,
+        /// Answer of the language popup.
+        choice: Choice,
+        asked: usize,
     }
 
     impl Fake {
@@ -324,6 +388,8 @@ mod tests {
                 race: false,
                 write_error: None,
                 blind: false,
+                choice: Choice::Unavailable,
+                asked: 0,
             }
         }
         fn caret_at_end(text: &str) -> Self {
@@ -387,6 +453,64 @@ mod tests {
             self.layout = Some(lang.to_owned());
             true
         }
+        fn choose_language(&mut self, _langs: &[&str]) -> Choice {
+            self.asked += 1;
+            self.choice
+        }
+    }
+
+    /// Index of `lang` among the built-in languages, as the popup would return it.
+    fn pick(lang: &str) -> Choice {
+        let c = ks_core::builtin().expect("built-in data");
+        Choice::Picked(c.languages().position(|l| l == lang).expect("language"))
+    }
+
+    #[test]
+    fn confident_conversion_never_asks() {
+        let mut f = Fake::caret_at_end("ghbdtn");
+        f.choice = Choice::Cancelled;
+        assert_eq!(go(&mut f), OK);
+        assert_eq!(f.asked, 0);
+    }
+
+    #[test]
+    fn low_confidence_follows_the_users_choice() {
+        let mut f = Fake::caret_at_end("привет");
+        f.choice = pick("en");
+        assert_eq!(go(&mut f), OK);
+        assert_eq!(f.content(), "ghbdtn");
+        assert_eq!(f.layout.as_deref(), Some("en"));
+        // Picking the language the text is already in changes nothing.
+        let mut f = Fake::caret_at_end("привет");
+        f.choice = pick("ru");
+        assert_eq!(go(&mut f), Outcome::Nothing);
+        assert_eq!((f.writes, f.asked), (0, 1));
+    }
+
+    #[test]
+    fn mixed_text_is_converted_to_the_picked_language() {
+        let mut f = Fake::new("привет ghbdtn", (0, 13));
+        f.choice = pick("ru");
+        assert_eq!(go(&mut f), OK);
+        assert_eq!(f.content(), "привет привет");
+        assert_eq!(f.layout.as_deref(), Some("ru"));
+    }
+
+    #[test]
+    fn dismissed_choice_cancels_without_writing() {
+        for text in ["привет", "привет ghbdtn"] {
+            let n = text.encode_utf16().count();
+            let mut f = Fake::new(text, (0, n));
+            f.choice = Choice::Cancelled;
+            assert_eq!(go(&mut f), Outcome::Cancelled);
+            assert_eq!(f.writes, 0);
+            assert_eq!(f.content(), text);
+        }
+        assert_eq!(Outcome::Cancelled.code(), "CANCELLED");
+        // An index outside the offered list is treated as a dismissal.
+        let mut f = Fake::caret_at_end("привет");
+        f.choice = Choice::Picked(99);
+        assert_eq!(go(&mut f), Outcome::Cancelled);
     }
 
     fn go(f: &mut Fake) -> Outcome {

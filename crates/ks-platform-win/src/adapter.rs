@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use ks_engine::{Config, Failure, Outcome, Platform, Refusal, Stop, TargetInfo, UserText};
+use ks_engine::{Choice, Config, Failure, Outcome, Platform, Refusal, Stop, TargetInfo, UserText};
 use windows::Win32::UI::Accessibility::IUIAutomationElement;
 
 use crate::gate::{self, CaptureError, Fingerprint, Gate, Token};
@@ -24,7 +24,7 @@ use crate::policy::{self, W1Refusal};
 use crate::profiles::{self, Profile};
 use crate::uia::{self, ComGuard, Read, Uia};
 use crate::w2::{self, ClipboardHold, Settled, W2Error};
-use crate::{desktop, edit, layout, process};
+use crate::{desktop, edit, layout, popup, process};
 
 /// W3 never types more than this many UTF-16 units.
 pub const W3_MAX_UNITS: usize = 200;
@@ -70,6 +70,7 @@ pub struct WinPlatform<'a> {
     profiles: &'a [Profile],
     clip: w2::Session,
     settled: Settled,
+    popup_timeout: Duration,
 }
 
 impl<'a> WinPlatform<'a> {
@@ -95,7 +96,13 @@ impl<'a> WinPlatform<'a> {
             profiles,
             clip: w2::Session::new(hold),
             settled: Settled::Nothing,
+            popup_timeout: popup::TIMEOUT,
         }
+    }
+
+    /// Overrides how long the language-choice popup waits (default [`popup::TIMEOUT`]).
+    pub fn set_popup_timeout(&mut self, timeout: Duration) {
+        self.popup_timeout = timeout;
     }
 
     /// What the last W2 paste of this operation did with the user's clipboard.
@@ -359,6 +366,21 @@ impl Platform for WinPlatform<'_> {
             self.settled = self.clip.settle(verified, confirmed);
         }
         verified.unwrap_or(false)
+    }
+
+    fn choose_language(&mut self, langs: &[&str]) -> Choice {
+        let Ok(t) = self.checked() else {
+            return Choice::Cancelled;
+        };
+        let (fp, gate, token) = (t.fp, self.gate, self.token);
+        // The popup never takes activation, so the fingerprint must stay the same while it
+        // is open; a newer operation or a focus change closes it.
+        let still_valid = move || gate.is_current(token) && gate::capture().ok() == Some(fp);
+        match popup::ask(langs, fp.focus, self.popup_timeout, &still_valid) {
+            popup::Answer::Picked(i) => Choice::Picked(i),
+            popup::Answer::Cancelled => Choice::Cancelled,
+            popup::Answer::Unavailable => Choice::Unavailable,
+        }
     }
 
     fn switch_layout(&mut self, lang: &str) -> bool {

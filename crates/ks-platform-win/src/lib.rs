@@ -42,6 +42,8 @@ pub mod instance;
 #[cfg(windows)]
 pub mod layout;
 #[cfg(windows)]
+pub mod popup;
+#[cfg(windows)]
 pub mod process;
 #[cfg(windows)]
 pub mod tray;
