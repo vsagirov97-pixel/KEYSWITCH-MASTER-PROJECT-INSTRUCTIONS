@@ -301,6 +301,17 @@ fn phrase_keeps_genuine_words_of_the_typed_language() {
 }
 
 #[test]
+fn sentence_mark_at_end_of_text_is_kept() {
+    // `?` at the end of the text after a dictionary word is the question mark; inside the
+    // text the same key is the Russian comma.
+    let c = conv();
+    for (input, expected) in [("ytn?", "нет?"), ("lf.", "да."), ("ytn? ult", "нет, где")]
+    {
+        assert_eq!(c.convert(input, lang::EN, lang::RU).unwrap().text, expected);
+    }
+}
+
+#[test]
 fn errors() {
     assert!(conv().convert("x", lang::EN, lang::EN).is_err());
     assert!(conv().convert("x", "de", lang::RU).is_err());

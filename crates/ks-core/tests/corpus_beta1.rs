@@ -183,9 +183,10 @@ fn floor(category: &str, total: usize) -> usize {
         // Beta 2 per-token decision (feat/win-beta2): mixed_lang_fix 0/10 -> 10/10; the
         // `_b2` categories are new and must pass completely (default 100).
         // Raised after the QA-B1-01..03 fixes on feat/win-beta1 (was 23/28, 31/35, 36/38).
-        "digits" => 95,           // measured 28/28
-        "keep_tech" => 95,        // measured 35/35
-        "punct_keys_en2ru" => 95, // measured 37/38 (`ytn?` -> `нет?`, expected `нет,`)
+        "digits" => 95,    // measured 28/28
+        "keep_tech" => 95, // measured 35/35
+        // `ytn?` moved to punct_sentence_end with expected `нет?` (Beta 2): now 37/37.
+        "punct_keys_en2ru" => 95,
         _ => 100,
         // FLOORS-END
     };

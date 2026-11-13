@@ -98,8 +98,19 @@ r2e("phrase_ru2en_lit", "lit", R2E_PHRASES[:12])
 
 # Letters that live on punctuation keys: б ю ж э х ъ ё  (, . ; ' [ ] `)
 e2r("punct_keys_en2ru", "phys", """люблю обычно жизнь это хлеб объект съезд юрист экран хотя
-работаю подъезд бюджет объявление жёлтый необходимо любой каждый уже был ещё ёлка хорошо. нет,
+работаю подъезд бюджет объявление жёлтый необходимо любой каждый уже был ещё ёлка хорошо.
 эхо жюри объём съёмка бюро убеждён""".split())
+# Beta 2: sentence punctuation at the end of the text. `ytn?` is `нет?` typed literally or
+# `нет,` typed physically; at the end of the text `?` `!` `.` after a dictionary word are kept
+# as sentence punctuation (`нет?`, `да.`, `привет.`).
+CASES += [("punct_sentence_end", typed(s, RU, EN, "lit"), s) for s in [
+    "нет?", "да.", "да!", "привет.", "тест.", "конечно.", "спасибо!", "почему?", "где?",
+    "как?", "хорошо?", "сейчас.", "завтра?", "нет!", "всё.",
+]]
+# A letter still wins when the word without the mark is not a dictionary word, and also when
+# both readings are dictionary words (`ltkf.` -> `делаю`, as `hf,jnf.` -> `работаю` above;
+# QA-B1-03): the corpus has no evidence that the sentence mark is more likely there.
+e2r("punct_sentence_end", "phys", ["знаю", "люблю", "этаж", "делаю", "помощью"])
 e2r("punct_keys_en2ru", "lit", ["нет.", "да, конечно", "люблю, обычно.", "это просто!",
                                  "хорошо; ладно", "(хлеб)", "\"жизнь\"", "объект: экран"])
 # English punctuation typed while Russian was active turns into letters.

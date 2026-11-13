@@ -188,13 +188,32 @@ punct_keys_en2ru	,sk	был
 punct_keys_en2ru	to`	ещё
 punct_keys_en2ru	`krf	ёлка
 punct_keys_en2ru	[jhjij/	хорошо.
-punct_keys_en2ru	ytn?	нет,
 punct_keys_en2ru	'[j	эхо
 punct_keys_en2ru	;.hb	жюри
 punct_keys_en2ru	j,]`v	объём
 punct_keys_en2ru	c]`vrf	съёмка
 punct_keys_en2ru	,.hj	бюро
 punct_keys_en2ru	e,t;l`y	убеждён
+punct_sentence_end	ytn?	нет?
+punct_sentence_end	lf.	да.
+punct_sentence_end	lf!	да!
+punct_sentence_end	ghbdtn.	привет.
+punct_sentence_end	ntcn.	тест.
+punct_sentence_end	rjytxyj.	конечно.
+punct_sentence_end	cgfcb,j!	спасибо!
+punct_sentence_end	gjxtve?	почему?
+punct_sentence_end	ult?	где?
+punct_sentence_end	rfr?	как?
+punct_sentence_end	[jhjij?	хорошо?
+punct_sentence_end	ctqxfc.	сейчас.
+punct_sentence_end	pfdnhf?	завтра?
+punct_sentence_end	ytn!	нет!
+punct_sentence_end	dc`.	всё.
+punct_sentence_end	pyf.	знаю
+punct_sentence_end	k.,k.	люблю
+punct_sentence_end	'nf;	этаж
+punct_sentence_end	ltkf.	делаю
+punct_sentence_end	gjvjom.	помощью
 punct_keys_en2ru	ytn.	нет.
 punct_keys_en2ru	lf, rjytxyj	да, конечно
 punct_keys_en2ru	k.,k., j,sxyj.	люблю, обычно.

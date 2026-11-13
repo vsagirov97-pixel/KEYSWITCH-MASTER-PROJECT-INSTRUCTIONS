@@ -188,13 +188,32 @@ sel_punct_keys_en2ru	,sk	был
 sel_punct_keys_en2ru	to`	ещё
 sel_punct_keys_en2ru	`krf	ёлка
 sel_punct_keys_en2ru	[jhjij/	хорошо.
-sel_punct_keys_en2ru	ytn?	нет,
 sel_punct_keys_en2ru	'[j	эхо
 sel_punct_keys_en2ru	;.hb	жюри
 sel_punct_keys_en2ru	j,]`v	объём
 sel_punct_keys_en2ru	c]`vrf	съёмка
 sel_punct_keys_en2ru	,.hj	бюро
 sel_punct_keys_en2ru	e,t;l`y	убеждён
+sel_punct_sentence_end	ytn?	нет,
+sel_punct_sentence_end	lf.	даю
+sel_punct_sentence_end	lf!	да!
+sel_punct_sentence_end	ghbdtn.	приветю
+sel_punct_sentence_end	ntcn.	тестю
+sel_punct_sentence_end	rjytxyj.	конечною
+sel_punct_sentence_end	cgfcb,j!	спасибо!
+sel_punct_sentence_end	gjxtve?	почему,
+sel_punct_sentence_end	ult?	где,
+sel_punct_sentence_end	rfr?	как,
+sel_punct_sentence_end	[jhjij?	хорошо,
+sel_punct_sentence_end	ctqxfc.	сейчасю
+sel_punct_sentence_end	pfdnhf?	завтра,
+sel_punct_sentence_end	ytn!	нет!
+sel_punct_sentence_end	dc`.	всёю
+sel_punct_sentence_end	pyf.	знаю
+sel_punct_sentence_end	k.,k.	люблю
+sel_punct_sentence_end	'nf;	этаж
+sel_punct_sentence_end	ltkf.	делаю
+sel_punct_sentence_end	gjvjom.	помощью
 sel_punct_keys_en2ru	ytn.	нетю
 sel_punct_keys_en2ru	lf, rjytxyj	даб конечно
 sel_punct_keys_en2ru	k.,k., j,sxyj.	люблюб обычною
