@@ -75,6 +75,9 @@ impl Platform for Hooked<'_, '_> {
     fn select_before_caret(&mut self, units: usize) -> Result<(), Stop> {
         self.inner.select_before_caret(units)
     }
+    fn restore_caret(&mut self, selected: &UserText) {
+        self.inner.restore_caret(selected);
+    }
     fn write(&mut self, text: &UserText) -> Result<(), Stop> {
         self.fire(At::BeforeWrite);
         self.inner.write(text)
@@ -556,7 +559,7 @@ fn focus_moves_before_write(id: &'static str, rich: bool) {
         .field("other_unchanged", other_unchanged)
         .field("source_len_after", fixture::text_len(k))
         .field("other_len_after", fixture::text_len(other_k))
-        // QA-B1-04: the word stays selected in the abandoned field.
+        // QA-B1-04: the word must not stay selected in the abandoned field.
         .field("source_selection_units_left", sel_b.saturating_sub(sel_a));
     if !fired.get() {
         return common::finish(
@@ -581,6 +584,9 @@ fn focus_moves_before_write(id: &'static str, rich: bool) {
     }
     if o != Outcome::Failed(Failure::TargetChanged) {
         problems.push("outcome is not TARGET_CHANGED");
+    }
+    if sel_a != sel_b {
+        problems.push("the word stayed selected in the original field (QA-B1-04)");
     }
     common::verdict(&r, &problems);
 }

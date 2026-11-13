@@ -180,6 +180,44 @@ impl Uia {
         select(&before_caret_range(&sel[0], units)?)?;
         Ok(true)
     }
+
+    /// Collapses the single selection of `el` to its end, but only if that selection is
+    /// still exactly `expected` (the fragment the operation selected). `Ok(true)` if the
+    /// selection was collapsed. Used to undo a caret-mode selection after a refused write.
+    pub fn collapse_selection_if(
+        &self,
+        el: &IUIAutomationElement,
+        expected: &str,
+    ) -> Result<bool, String> {
+        if password_guard(el).is_some() {
+            return Ok(false);
+        }
+        let Some(tp) = text_pattern(el) else {
+            return Ok(false);
+        };
+        let sel = selection(&tp)?;
+        if sel.len() != 1 {
+            return Ok(false);
+        }
+        let max =
+            i32::try_from(expected.encode_utf16().count().saturating_add(1)).unwrap_or(i32::MAX);
+        if range_text(&sel[0], max)? != expected {
+            return Ok(false);
+        }
+        // SAFETY: method calls on live interfaces; `r` is a fresh clone we own.
+        let r = unsafe {
+            let r = sel[0].Clone().map_err(|e| format!("Clone: {e}"))?;
+            r.MoveEndpointByRange(
+                TextPatternRangeEndpoint_Start,
+                &r,
+                TextPatternRangeEndpoint_End,
+            )
+            .map_err(|e| format!("MoveEndpointByRange: {e}"))?;
+            r
+        };
+        select(&r)?;
+        Ok(true)
+    }
 }
 
 /// Range of at most `units` characters that ends at the start of `sel`.

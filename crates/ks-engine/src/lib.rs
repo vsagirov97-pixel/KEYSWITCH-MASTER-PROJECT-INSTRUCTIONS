@@ -158,6 +158,13 @@ pub trait Platform {
     fn read_before_caret(&mut self, max_units: usize) -> Result<Option<UserText>, Stop>;
     /// Selects the last `units` units before the caret.
     fn select_before_caret(&mut self, units: usize) -> Result<(), Stop>;
+    /// Undoes [`Platform::select_before_caret`] after the operation stopped before the
+    /// write took place: if the captured field still exists and its selection is still
+    /// exactly `selected`, collapses it so the caret is back where it was. Never touches
+    /// any other window. Best effort; the default does nothing.
+    fn restore_caret(&mut self, selected: &UserText) {
+        let _ = selected;
+    }
     /// Replaces the current selection with `text`.
     fn write(&mut self, text: &UserText) -> Result<(), Stop>;
     /// `true` if the text right before the caret now equals `expected`.
@@ -232,6 +239,36 @@ fn tail_fragment(before: &UserText, window_full: bool) -> Fragment {
         return Fragment::Unbounded;
     }
     Fragment::Found(UserText::new(s[word_start..].to_owned()))
+}
+
+/// Caret mode after selecting: confirms the selection is the converted fragment, then
+/// writes. On any stop the selection is undone (QA-B1-04): left in place, the user's next
+/// keystroke would delete the word.
+fn select_checked_write<P: Platform>(
+    platform: &mut P,
+    config: &Config,
+    source: &UserText,
+    converted: &UserText,
+) -> Result<(), Stop> {
+    // The selection we just made must be exactly the fragment we converted.
+    let now = match platform.read_selection(config.max_units + 1) {
+        Ok(Some(now)) => now,
+        Ok(None) => return Err(Stop::Failed(Failure::TargetChanged)),
+        Err(stop) => {
+            platform.restore_caret(source);
+            return Err(stop);
+        }
+    };
+    if !now.same_as(source) {
+        // Text changed between read and select: undo what was actually selected.
+        platform.restore_caret(&now);
+        return Err(Stop::Failed(Failure::TargetChanged));
+    }
+    let written = platform.write(converted);
+    if written.is_err() {
+        platform.restore_caret(source);
+    }
+    written
 }
 
 /// Runs one conversion operation. Never panics on user data and never returns text.
@@ -338,13 +375,12 @@ fn run_inner<P: Platform>(
 
     if by_caret {
         platform.select_before_caret(source.utf16_len())?;
-        // The selection we just made must be exactly the fragment we converted.
-        let now = platform.read_selection(config.max_units + 1)?;
-        if !now.is_some_and(|t| t.same_as(&source)) {
-            return Err(Stop::Failed(Failure::TargetChanged));
-        }
+        // From here on a stop must not leave the word selected (QA-B1-04): the next
+        // keystroke of the user would delete it.
+        select_checked_write(platform, config, &source, &converted)?;
+    } else {
+        platform.write(&converted)?;
     }
-    platform.write(&converted)?;
     let verified = platform.verify(&converted);
     // The layout follows the text: no switch unless the write was confirmed.
     let layout_switched = verified && platform.switch_layout(&to);
@@ -448,6 +484,12 @@ mod tests {
             let end = self.sel.0;
             let n = expected.utf16_len();
             !self.blind && end >= n && self.slice(end - n, end).same_as(expected)
+        }
+        fn restore_caret(&mut self, selected: &UserText) {
+            let (a, b) = self.sel;
+            if a < b && self.slice(a, b).same_as(selected) {
+                self.sel = (b, b);
+            }
         }
         fn switch_layout(&mut self, lang: &str) -> bool {
             self.layout = Some(lang.to_owned());
@@ -616,6 +658,8 @@ mod tests {
         f.race = true;
         assert_eq!(go(&mut f), Outcome::Failed(Failure::TargetChanged));
         assert_eq!(f.writes, 0);
+        // The caret is back after the typed character, nothing stays selected.
+        assert_eq!(f.sel, (7, 7));
     }
 
     #[test]
@@ -624,6 +668,30 @@ mod tests {
         f.write_error = Some(Stop::Failed(Failure::TargetChanged));
         assert_eq!(go(&mut f), Outcome::Failed(Failure::TargetChanged));
         assert_eq!(f.layout, None);
+    }
+
+    #[test]
+    fn refused_write_in_caret_mode_does_not_leave_the_word_selected() {
+        for e in [
+            Stop::Refused(Refusal::ForbiddenChars),
+            Stop::Refused(Refusal::TooLong),
+            Stop::Failed(Failure::ModifiersHeld),
+            Stop::Failed(Failure::TargetChanged),
+        ] {
+            let mut f = Fake::caret_at_end("abc ghbdtn");
+            f.write_error = Some(e);
+            assert_eq!(go(&mut f).code(), run_code(e));
+            assert_eq!(f.sel, (10, 10));
+            assert_eq!(f.content(), "abc ghbdtn");
+        }
+    }
+
+    fn run_code(e: Stop) -> &'static str {
+        match e {
+            Stop::Refused(r) => Outcome::Refused(r).code(),
+            Stop::Failed(x) => Outcome::Failed(x).code(),
+            Stop::Cancelled => Outcome::Cancelled.code(),
+        }
     }
 
     #[test]

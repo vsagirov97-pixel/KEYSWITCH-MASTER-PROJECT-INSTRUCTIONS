@@ -329,6 +329,22 @@ impl Platform for WinPlatform<'_> {
         }
     }
 
+    fn restore_caret(&mut self, selected: &UserText) {
+        // Bound to the captured element, not to whatever has the focus now: the focus may
+        // have moved away (that is often why the write stopped). Only the same process
+        // instance, only if the selection is still exactly the fragment we selected; a
+        // UIA selection change, no input is sent.
+        let Some(t) = self.target.as_ref() else {
+            return;
+        };
+        if t.copy_read || gate::process_start_time(t.fp.pid) != Some(t.fp.start_time) {
+            return;
+        }
+        let _ = self
+            .uia
+            .collapse_selection_if(&t.element, selected.expose());
+    }
+
     fn write(&mut self, text: &UserText) -> Result<(), Stop> {
         let t = self.checked()?;
         match t.method {

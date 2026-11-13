@@ -94,6 +94,12 @@ impl Platform for Field {
         let n = expected.utf16_len();
         end >= n && self.slice(end - n, end).same_as(expected)
     }
+    fn restore_caret(&mut self, selected: &UserText) {
+        let (a, b) = self.sel;
+        if a < b && self.slice(a, b).same_as(selected) {
+            self.sel = (b, b);
+        }
+    }
     fn switch_layout(&mut self, lang: &str) -> bool {
         self.layout = Some(lang.to_owned());
         true
@@ -325,7 +331,7 @@ fn permissive_write_keeps_every_unmapped_character() {
 /// word selected - the next key the user presses replaces it. This test documents the current
 /// behaviour; when the defect is fixed the final assertion must be inverted.
 #[test]
-fn qa_b1_04_refused_write_after_caret_selection_leaves_word_selected() {
+fn qa_b1_04_refused_write_after_caret_selection_restores_the_caret() {
     let text = "abc ghbdtn\u{200B}";
     let mut f = Field::caret_at_end(text);
     f.strict = true;
@@ -335,7 +341,12 @@ fn qa_b1_04_refused_write_after_caret_selection_leaves_word_selected() {
     assert!(f.content() == text);
     assert_eq!(f.selects, 1);
     let (a, b) = f.sel;
-    assert!(a < b, "current behaviour: the fragment stays selected");
+    assert!(a == b, "QA-B1-04 fixed: nothing stays selected");
+    assert_eq!(
+        b,
+        text.encode_utf16().count(),
+        "the caret is back at the end"
+    );
 }
 
 // ---- confidence / mixed ----
