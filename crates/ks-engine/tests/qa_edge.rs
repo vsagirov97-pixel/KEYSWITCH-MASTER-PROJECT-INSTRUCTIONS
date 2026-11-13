@@ -371,7 +371,9 @@ fn correct_text_is_low_confidence() {
 
 #[test]
 fn mixed_languages_are_refused() {
-    for text in ["привет world", "ghbdtn мир", "aб"] {
+    // Beta 2: refused (popup) only when no token is confidently in the wrong layout or one
+    // is unclear; `ghbdtn мир` is now converted per token without asking.
+    for text in ["привет world", "Hello мир", "aб"] {
         assert_eq!(untouched(Field::all_selected(text)), "MIXED");
     }
     // Caret mode looks at the last word only.

@@ -86,11 +86,74 @@ fn selection_corpus_is_literal() {
     );
 }
 
+/// Mixed selection (Beta 2): the per-token decision in `ConvertMode::Literal`. A token is
+/// re-typed only when the decision is confident and equals its key-for-key re-typing;
+/// otherwise the popup is shown (here: text unchanged). Never a wrong or false replacement.
+#[test]
+fn mixed_selection_per_token() {
+    let c = builtin().expect("built-in data");
+    let (mut cases, mut pass, mut popup, mut to_fix) = (0, 0, 0, 0);
+    let mut bad: Vec<String> = Vec::new();
+    for line in CORPUS.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut f = line.split('\t');
+        let (Some(cat), Some(input), Some(expected)) = (f.next(), f.next(), f.next()) else {
+            panic!("malformed corpus line");
+        };
+        if !matches!(c.detect(input), Detection::Mixed(_)) {
+            continue;
+        }
+        cases += 1;
+        if input != expected {
+            to_fix += 1;
+        }
+        let r = c.convert_mixed_auto(input, ConvertMode::Literal);
+        if r.confidence != Confidence::High {
+            popup += 1;
+            if input == expected {
+                pass += 1;
+            }
+            continue;
+        }
+        if r.text == expected {
+            pass += 1;
+        } else {
+            bad.push(format!(
+                "{cat:20} in={input:?} expected={expected:?} actual={:?}",
+                r.text
+            ));
+        }
+    }
+    println!(
+        "\nmixed selection: {cases} cases ({to_fix} need a fix), {pass} pass, {popup} popup, {} wrong",
+        bad.len()
+    );
+    for b in &bad {
+        println!("  {b}");
+    }
+    assert!(cases >= 40, "too few mixed cases: {cases}");
+    assert!(
+        bad.is_empty(),
+        "{} mixed selections replaced wrongly",
+        bad.len()
+    );
+}
+
 /// What ends up in the text field after one hotkey press, per the Beta 1 engine policy.
 fn engine_result(c: &ks_core::Converter, input: &str) -> (String, &'static str) {
     let from = match c.detect(input) {
         Detection::NoLetters => return (input.to_owned(), "NO_LETTERS"),
-        Detection::Mixed(_) => return (input.to_owned(), "MIXED"),
+        Detection::Mixed(_) => {
+            // Per-token decision first; the language popup only when it is ambiguous.
+            let r = c.convert_mixed_auto(input, ConvertMode::Smart);
+            return if r.confidence == Confidence::High {
+                (r.text, "MIXED_AUTO")
+            } else {
+                (input.to_owned(), "MIXED")
+            };
+        }
         Detection::Single(l) => l,
     };
     let Some(to) = c.languages().find(|l| *l != from).map(str::to_owned) else {
@@ -117,7 +180,8 @@ struct Stat {
 fn floor(category: &str, total: usize) -> usize {
     let percent = match category {
         // FLOORS-BEGIN (kept in sync with docs/qa/beta1-qa-report.md)
-        "mixed_lang_fix" => 0, // language popup is not in Beta 1: always refused
+        // Beta 2 per-token decision (feat/win-beta2): mixed_lang_fix 0/10 -> 10/10; the
+        // `_b2` categories are new and must pass completely (default 100).
         // Raised after the QA-B1-01..03 fixes on feat/win-beta1 (was 23/28, 31/35, 36/38).
         "digits" => 95,           // measured 28/28
         "keep_tech" => 95,        // measured 35/35

@@ -176,6 +176,7 @@ impl Converter {
         };
         let mut margin_sum = 0.0;
         let mut any_letters = false;
+        let (mut kept_own, mut all_confident) = (false, true);
         let pieces = split_tokens(text);
         let sentence = is_sentence(&pieces);
         // Number tokens whose separators the target layout reads differently (`3/14`):
@@ -201,14 +202,29 @@ impl Converter {
                         out.kept_tokens += 1;
                         continue;
                     }
+                    let margin = token_cost(tok, src, last) - best_cost;
+                    if sentence && keeps_own_language(tok, &best, src, tgt, margin) {
+                        // A genuine word of the typed language among wrong-layout words
+                        // (`cgfcb,j, John` -> `спасибо, John`): left as typed.
+                        out.text.push_str(tok);
+                        out.kept_tokens += 1;
+                        kept_own = true;
+                        continue;
+                    }
+                    if !(margin > MIXED_MARGIN && words_known(&best, tgt) && !words_known(tok, src))
+                    {
+                        all_confident = false;
+                    }
                     any_letters = true;
-                    margin_sum += token_cost(tok, src, last) - best_cost;
+                    margin_sum += margin;
                     out.text.push_str(&best);
                     out.converted_tokens += 1;
                 }
             }
         }
-        if !any_letters || margin_sum < 0.0 {
+        // Keeping some words is a per-token decision: every converted word must then be
+        // confidently in the wrong layout on its own (`npm install` stays).
+        if !any_letters || margin_sum < 0.0 || (kept_own && !all_confident) {
             out.confidence = Confidence::Low;
         }
         if out.converted_tokens > 0 {
@@ -283,6 +299,113 @@ impl Converter {
         Ok(out)
     }
 
+    /// Mixed text without a chosen target: each token is decided on its own. A token is
+    /// converted only when it is confidently typed in the wrong layout (its re-typing is made
+    /// of dictionary words, the original is not, and the re-typing wins by more than
+    /// [`MIXED_MARGIN`]); tokens that are correct, technical (URL, e-mail, identifier,
+    /// version) or letterless stay. `High` only if at least one token was converted and no
+    /// token was ambiguous; otherwise `Low` with the text unchanged, and the caller asks the
+    /// user for the language.
+    ///
+    /// [`ConvertMode::Literal`] (selection, D-31) decides the same way but accepts a token
+    /// only if the language-model choice equals its key-for-key re-typing; any difference
+    /// makes the text ambiguous.
+    pub fn convert_mixed_auto(&self, text: &str, mode: ConvertMode) -> Conversion {
+        let mut out = Conversion {
+            text: String::with_capacity(text.len()),
+            confidence: Confidence::High,
+            converted_tokens: 0,
+            kept_tokens: 0,
+        };
+        let mut ambiguous = false;
+        let pieces = split_tokens(text);
+        let sentence = is_sentence(&pieces);
+        for piece in pieces {
+            match piece {
+                Piece::Space(s) => out.text.push_str(s),
+                Piece::Token { text: tok, last } => {
+                    match self.token_decision(tok, last, last && sentence, mode) {
+                        TokenDecision::Keep => {
+                            out.text.push_str(tok);
+                            out.kept_tokens += 1;
+                        }
+                        TokenDecision::Convert(t) => {
+                            out.text.push_str(&t);
+                            out.converted_tokens += 1;
+                        }
+                        TokenDecision::Ambiguous => {
+                            ambiguous = true;
+                            out.text.push_str(tok);
+                            out.kept_tokens += 1;
+                        }
+                    }
+                }
+            }
+        }
+        if ambiguous || out.converted_tokens == 0 {
+            out.confidence = Confidence::Low;
+            out.text = text.to_owned();
+            out.kept_tokens += out.converted_tokens;
+            out.converted_tokens = 0;
+        }
+        out
+    }
+
+    /// Per-token decision of [`Converter::convert_mixed_auto`].
+    fn token_decision(
+        &self,
+        tok: &str,
+        last: bool,
+        sentence_end: bool,
+        mode: ConvertMode,
+    ) -> TokenDecision {
+        let present: Vec<usize> = (0..self.langs.len())
+            .filter(|&i| tok.chars().any(|c| self.langs[i].model.is_letter(c)))
+            .collect();
+        let s = match present.as_slice() {
+            [] => return TokenDecision::Keep,
+            [one] => *one,
+            // Letters of two languages in one token: only the user knows.
+            _ => return TokenDecision::Ambiguous,
+        };
+        if looks_like_address_or_identifier(tok) {
+            return TokenDecision::Keep;
+        }
+        let src = &self.langs[s];
+        let keep_cost = token_cost(tok, src, last);
+        let orig_known = words_known(tok, src);
+        let mut decision = TokenDecision::Keep;
+        for (t, tgt) in self.langs.iter().enumerate() {
+            if t == s {
+                continue;
+            }
+            let (best, best_cost) = best_candidate(tok, src, tgt, last, sentence_end);
+            if looks_technical(tok, &best) {
+                return TokenDecision::Keep;
+            }
+            let margin = keep_cost - best_cost;
+            let conv_known = words_known(&best, tgt);
+            let this = if conv_known && !orig_known && margin > MIXED_MARGIN {
+                if mode == ConvertMode::Literal && best != literal_token(tok, src, tgt) {
+                    TokenDecision::Ambiguous
+                } else {
+                    TokenDecision::Convert(best)
+                }
+            } else if margin < -MIXED_MARGIN || (orig_known && !conv_known) {
+                TokenDecision::Keep
+            } else {
+                TokenDecision::Ambiguous
+            };
+            decision = match (decision, this) {
+                (TokenDecision::Keep, d) => d,
+                (d, TokenDecision::Keep) => d,
+                // Two targets both plausible (more than two languages).
+                _ => TokenDecision::Ambiguous,
+            };
+        }
+        decision
+    }
+
     /// Language (other than `target`) with the most letters in `tok`, if any.
     fn dominant_foreign(&self, tok: &str, target: usize) -> Option<usize> {
         let mut best: Option<(usize, usize)> = None;
@@ -297,6 +420,55 @@ impl Converter {
         }
         best.map(|(i, _)| i)
     }
+}
+
+/// Per-token outcome of the automatic mixed-text decision.
+enum TokenDecision {
+    Keep,
+    Convert(String),
+    Ambiguous,
+}
+
+/// `true` if every letter run of `s` is a dictionary word of `lang` (and there is one).
+fn words_known(s: &str, lang: &Language) -> bool {
+    let mut any = false;
+    let mut word = String::new();
+    for c in s.chars().chain(std::iter::once(' ')) {
+        if c.is_alphabetic() {
+            word.extend(c.to_lowercase());
+        } else if !word.is_empty() {
+            if !lang.model.knows(&word) {
+                return false;
+            }
+            any = true;
+            word.clear();
+        }
+    }
+    any
+}
+
+/// A token of a several-token text that is a dictionary word as typed, while its re-typing
+/// is not and is clearly worse: the word was meant in the typed language.
+fn keeps_own_language(tok: &str, best: &str, src: &Language, tgt: &Language, margin: f32) -> bool {
+    margin < -MIXED_MARGIN && words_known(tok, src) && !words_known(best, tgt)
+}
+
+/// URL, e-mail, path or programming identifier: never rewritten by the automatic mixed-text
+/// decision (`https://x`, `user@host`, `www.x`, `snake_case`, `std::fmt`, `camelCase`).
+fn looks_like_address_or_identifier(tok: &str) -> bool {
+    if tok.contains("://") || tok.contains("::") || tok.starts_with("www.") {
+        return true;
+    }
+    let chars: Vec<char> = tok.chars().collect();
+    let inner = |i: usize| {
+        i > 0
+            && chars[i - 1].is_alphanumeric()
+            && chars.get(i + 1).is_some_and(|c| c.is_alphanumeric())
+    };
+    chars.iter().enumerate().any(|(i, &c)| {
+        ((c == '@' || c == '_') && inner(i))
+            || (i > 0 && chars[i - 1].is_lowercase() && c.is_uppercase())
+    })
 }
 
 /// Literal conversion of `text`: `convert(token)` gives the re-typed token or `None` to keep

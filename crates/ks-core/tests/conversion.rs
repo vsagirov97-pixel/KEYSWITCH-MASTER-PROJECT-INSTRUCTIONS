@@ -261,6 +261,46 @@ fn mixed_keeps_genuine_foreign_word() {
 }
 
 #[test]
+fn mixed_auto_converts_only_confident_tokens() {
+    let r = conv().convert_mixed_auto("hello цщкдв", ConvertMode::Smart);
+    assert_eq!(
+        (r.text.as_str(), r.confidence),
+        ("hello world", Confidence::High)
+    );
+    assert_eq!((r.converted_tokens, r.kept_tokens), (1, 1));
+    // Technical tokens and digits stay, wrong words around them are fixed.
+    let r = conv().convert_mixed_auto("версия v1.2.3 ujnjdf", ConvertMode::Smart);
+    assert_eq!(r.text, "версия v1.2.3 готова");
+    let r = conv().convert_mixed_auto("на user@example.com ctujlyz в 10", ConvertMode::Smart);
+    assert_eq!(r.text, "на user@example.com сегодня в 10");
+}
+
+#[test]
+fn mixed_auto_is_low_when_nothing_is_clear() {
+    for text in ["привет world", "aб", "ghbdtnмир"] {
+        let r = conv().convert_mixed_auto(text, ConvertMode::Smart);
+        assert_eq!((r.text.as_str(), r.confidence), (text, Confidence::Low));
+    }
+    // Selection: the guess must equal the key-for-key re-typing (`,` would become `б`).
+    let r = conv().convert_mixed_auto("ghbdtn, как дела?", ConvertMode::Literal);
+    assert_eq!(r.confidence, Confidence::Low);
+    let r = conv().convert_mixed_auto("ghbdtn, как дела?", ConvertMode::Smart);
+    assert_eq!(r.text, "привет, как дела?");
+}
+
+#[test]
+fn phrase_keeps_genuine_words_of_the_typed_language() {
+    let r = conv().convert("cgfcb,j, John", lang::EN, lang::RU).unwrap();
+    assert_eq!(
+        (r.text.as_str(), r.confidence),
+        ("спасибо, John", Confidence::High)
+    );
+    // A kept word demands that every converted word is confidently wrong on its own.
+    let r = conv().convert("npm install", lang::EN, lang::RU).unwrap();
+    assert_eq!(r.confidence, Confidence::Low);
+}
+
+#[test]
 fn errors() {
     assert!(conv().convert("x", lang::EN, lang::EN).is_err());
     assert!(conv().convert("x", "de", lang::RU).is_err());
@@ -312,5 +352,15 @@ fn invariants_on_random_input() {
         }
         let m = conv().convert_mixed(&input, lang::RU).unwrap().text;
         assert_eq!(m.chars().count(), input.chars().count());
+        for mode in [ConvertMode::Smart, ConvertMode::Literal] {
+            let a = conv().convert_mixed_auto(&input, mode);
+            assert_eq!(a.text.chars().count(), input.chars().count());
+            if a.confidence == Confidence::Low {
+                assert_eq!(
+                    a.text, input,
+                    "an unclear decision must not change the text"
+                );
+            }
+        }
     }
 }

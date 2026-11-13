@@ -19,9 +19,10 @@ use ks_winprobe::report::{Report, Status};
 use ks_winprobe::uia::{ComGuard, Uia};
 use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_ESCAPE};
 
-const MIXED: &str = "привет ghbdtn";
-const MIXED_UNITS: i32 = 13;
-const MIXED_AS_RU: &str = "привет привет";
+// Beta 2: no token is confidently wrong, so the per-token decision asks the user.
+const MIXED: &str = "привет world";
+const MIXED_UNITS: i32 = 12;
+const MIXED_AS_RU: &str = "привет цщкдв";
 
 /// What the helper thread saw while the popup was open.
 #[derive(Clone, Copy, Default)]

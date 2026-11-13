@@ -337,6 +337,16 @@ fn ask<P: Platform>(
     }
 }
 
+/// Language of the last single-language word of `text`, if any.
+fn last_word_language(converter: &Converter, text: &str) -> Option<String> {
+    text.split_whitespace()
+        .rev()
+        .find_map(|w| match converter.detect(w) {
+            Detection::Single(l) => Some(l),
+            _ => None,
+        })
+}
+
 fn run_inner<P: Platform>(
     platform: &mut P,
     converter: &Converter,
@@ -376,12 +386,21 @@ fn run_inner<P: Platform>(
     let (to, converted) = match converter.detect(source.expose()) {
         Detection::NoLetters => return Ok(Outcome::Nothing),
         Detection::Mixed(_) => {
-            // Letters of several languages: only the user knows which one was meant.
-            let to = ask(platform, converter, Refusal::Mixed)?;
-            let Ok(conversion) = converter.convert_mixed_with(source.expose(), &to, mode) else {
-                return Ok(Outcome::Nothing);
-            };
-            (to, UserText::new(conversion.text))
+            // Letters of several languages: first a per-token decision (only words that are
+            // confidently in the wrong layout change); the layout follows the last word.
+            let auto = converter.convert_mixed_auto(source.expose(), mode);
+            match last_word_language(converter, &auto.text) {
+                Some(l) if auto.confidence == Confidence::High => (l, UserText::new(auto.text)),
+                _ => {
+                    // Unclear tokens: only the user knows which language was meant.
+                    let to = ask(platform, converter, Refusal::Mixed)?;
+                    let Ok(conversion) = converter.convert_mixed_with(source.expose(), &to, mode)
+                    else {
+                        return Ok(Outcome::Nothing);
+                    };
+                    (to, UserText::new(conversion.text))
+                }
+            }
         }
         Detection::Single(from) => {
             let Some(to) = converter
@@ -586,6 +605,20 @@ mod tests {
     }
 
     #[test]
+    fn mixed_selection_converts_confident_tokens_without_asking() {
+        let mut f = Fake::new("hello цщкдв", (0, 11));
+        f.choice = Choice::Cancelled;
+        assert_eq!(go(&mut f), OK);
+        assert_eq!((f.content().as_str(), f.asked), ("hello world", 0));
+        assert_eq!(f.layout.as_deref(), Some("en"));
+        // Nothing confidently wrong: the popup decides.
+        let mut f = Fake::new("привет world", (0, 12));
+        f.choice = Choice::Cancelled;
+        assert_eq!(go(&mut f), Outcome::Cancelled);
+        assert_eq!((f.content().as_str(), f.asked), ("привет world", 1));
+    }
+
+    #[test]
     fn selection_is_literal_and_caret_word_is_smart() {
         // D-31.
         let mut f = Fake::new("v1.2.3", (0, 6));
@@ -603,8 +636,9 @@ mod tests {
     #[test]
     fn dismissed_choice_cancels_without_writing() {
         // A caret word of low confidence and a mixed selection both ask (D-31: a single-
-        // language selection is converted key for key without asking).
-        for (text, sel) in [("привет", (6, 6)), ("привет ghbdtn", (0, 13))] {
+        // language selection is converted key for key without asking). `привет world` has no
+        // confidently wrong token, so the per-token decision gives way to the popup.
+        for (text, sel) in [("привет", (6, 6)), ("привет world", (0, 12))] {
             let mut f = Fake::new(text, sel);
             f.choice = Choice::Cancelled;
             assert_eq!(go(&mut f), Outcome::Cancelled);
@@ -729,7 +763,7 @@ mod tests {
     fn correct_text_is_low_confidence_and_mixed_is_refused() {
         let mut f = Fake::caret_at_end("привет");
         assert_eq!(go(&mut f), Outcome::Refused(Refusal::LowConfidence));
-        let mut f = Fake::new("привет ghbdtn", (0, 13));
+        let mut f = Fake::new("привет world", (0, 12));
         assert_eq!(go(&mut f), Outcome::Refused(Refusal::Mixed));
         assert_eq!(f.writes, 0);
     }
