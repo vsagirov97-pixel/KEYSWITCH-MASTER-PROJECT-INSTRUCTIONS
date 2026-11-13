@@ -1,14 +1,19 @@
-//! KeySwitch operation pipeline (Beta 1: conversion only).
+//! KeySwitch operation pipelines: conversion ([`run`]) and Macro Studio ([`run_macro`]).
 //!
-//! `hotkey → gate → read → detect/convert → (language choice) → write → post-check → switch
-//! layout`.
+//! Conversion: `hotkey → gate → read → detect/convert → (language choice) → write →
+//! post-check → switch layout`. Macros: see [`macros`].
 //!
 //! This crate has no OS dependencies and no `unsafe`: everything system-specific sits behind
 //! the [`Platform`] trait (implemented by `ks-platform-win`). Results are codes only — no type
 //! returned from [`run`] can hold user text; text travels exclusively as [`UserText`].
 
+pub mod macros;
 mod user_text;
 
+pub use macros::{
+    CodeLanguage, ContentError, MACRO_MAX_CHARS, Macro, MacroAction, MacroBody, MacroInput,
+    MacroPermissions, MacroRunner, NoCodeRunner, check_content, run_macro,
+};
 pub use user_text::{UserText, wipe};
 
 use ks_core::{Confidence, ConvertMode, Converter, Detection};
@@ -45,6 +50,8 @@ pub enum Refusal {
     Clipboard,
     /// Another program touched the clipboard during the operation; it was aborted.
     ClipboardListener,
+    /// The feature is not available in this build (code macros before the sandbox).
+    NotAvailable,
 }
 
 /// Why a started operation stopped. Nothing is written after a failure.
@@ -92,7 +99,13 @@ pub enum Outcome {
         /// The keyboard layout switch was requested successfully (or was already right).
         layout_switched: bool,
     },
-    /// Nothing to convert (no selection and no word before the caret, no letters, no change).
+    /// A macro's text was inserted at the caret (or replaced the selection).
+    Inserted {
+        /// The post-check re-read the target and found the inserted text.
+        verified: bool,
+    },
+    /// Nothing to convert (no selection and no word before the caret, no letters, no change)
+    /// or an empty macro.
     Nothing,
     /// Refused by policy.
     Refused(Refusal),
@@ -110,6 +123,8 @@ impl Outcome {
             Outcome::Converted {
                 verified: false, ..
             } => "CONVERTED_UNVERIFIED",
+            Outcome::Inserted { verified: true } => "MACRO_INSERTED",
+            Outcome::Inserted { verified: false } => "MACRO_INSERTED_UNVERIFIED",
             Outcome::Nothing => "NOTHING",
             Outcome::Cancelled => "CANCELLED",
             Outcome::Refused(r) => match r {
@@ -127,6 +142,7 @@ impl Outcome {
                 Refusal::ForbiddenChars => "FORBIDDEN_CHARS",
                 Refusal::Clipboard => "CLIPBOARD_UNAVAILABLE",
                 Refusal::ClipboardListener => "CLIPBOARD_LISTENER",
+                Refusal::NotAvailable => "NOT_AVAILABLE",
             },
             Outcome::Failed(f) => match f {
                 Failure::TargetChanged => "TARGET_CHANGED",
@@ -273,14 +289,38 @@ fn select_checked_write<P: Platform>(
     written
 }
 
+impl From<Stop> for Outcome {
+    fn from(stop: Stop) -> Self {
+        match stop {
+            Stop::Refused(r) => Outcome::Refused(r),
+            Stop::Failed(f) => Outcome::Failed(f),
+            Stop::Cancelled => Outcome::Cancelled,
+        }
+    }
+}
+
 /// Runs one conversion operation. Never panics on user data and never returns text.
 pub fn run<P: Platform>(platform: &mut P, converter: &Converter, config: &Config) -> Outcome {
     match run_inner(platform, converter, config) {
         Ok(outcome) => outcome,
-        Err(Stop::Refused(r)) => Outcome::Refused(r),
-        Err(Stop::Failed(f)) => Outcome::Failed(f),
-        Err(Stop::Cancelled) => Outcome::Cancelled,
+        Err(stop) => stop.into(),
     }
+}
+
+/// Captures the target and applies every refusal shared by all operations: the platform's
+/// own (secure desktop, self, elevated, console, password, read-only, no text interface)
+/// and the excluded-apps list.
+pub(crate) fn admit<P: Platform>(platform: &mut P, config: &Config) -> Result<(), Stop> {
+    let target = platform.begin()?;
+    if target.exe.is_empty() {
+        // QA-B1-06: fail closed even if a platform does not refuse unknown executables.
+        if !config.excluded.is_empty() {
+            return Err(Stop::Refused(Refusal::Unsupported));
+        }
+    } else if config.excluded.contains(&target.exe) {
+        return Err(Stop::Refused(Refusal::ExcludedApp));
+    }
+    Ok(())
 }
 
 /// The language the user picked, or the stop that ends the operation.
@@ -302,15 +342,7 @@ fn run_inner<P: Platform>(
     converter: &Converter,
     config: &Config,
 ) -> Result<Outcome, Stop> {
-    let target = platform.begin()?;
-    if target.exe.is_empty() {
-        // QA-B1-06: fail closed even if a platform does not refuse unknown executables.
-        if !config.excluded.is_empty() {
-            return Err(Stop::Refused(Refusal::Unsupported));
-        }
-    } else if config.excluded.contains(&target.exe) {
-        return Err(Stop::Refused(Refusal::ExcludedApp));
-    }
+    admit(platform, config)?;
 
     // One unit more than the limit, to tell "exactly at the limit" from "longer".
     let selection = platform
@@ -777,5 +809,17 @@ mod tests {
         assert_eq!(OK.code(), "CONVERTED");
         assert_eq!(Outcome::Refused(Refusal::Password).code(), "PASSWORD");
         assert_eq!(Outcome::Nothing.code(), "NOTHING");
+        assert_eq!(
+            Outcome::Inserted { verified: true }.code(),
+            "MACRO_INSERTED"
+        );
+        assert_eq!(
+            Outcome::Inserted { verified: false }.code(),
+            "MACRO_INSERTED_UNVERIFIED"
+        );
+        assert_eq!(
+            Outcome::Refused(Refusal::NotAvailable).code(),
+            "NOT_AVAILABLE"
+        );
     }
 }

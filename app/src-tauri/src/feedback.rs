@@ -21,6 +21,8 @@ pub const CLIPBOARD_HELD: &str = "CLIPBOARD_HELD";
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Converted,
+    /// A macro's text was inserted.
+    Inserted,
     Nothing,
     Cancelled,
     Refused,
@@ -42,6 +44,7 @@ impl LastOperation {
     pub fn new(outcome: Outcome, clipboard_held: bool) -> Self {
         let kind = match outcome {
             Outcome::Converted { .. } => Kind::Converted,
+            Outcome::Inserted { .. } => Kind::Inserted,
             Outcome::Nothing => Kind::Nothing,
             Outcome::Cancelled => Kind::Cancelled,
             Outcome::Refused(_) => Kind::Refused,
@@ -60,8 +63,8 @@ impl LastOperation {
     pub fn notice_code(&self) -> Option<&'static str> {
         match self.kind {
             Kind::Refused | Kind::Failed => Some(self.code),
-            Kind::Converted if self.clipboard_held => Some(CLIPBOARD_HELD),
-            Kind::Converted | Kind::Nothing | Kind::Cancelled => None,
+            Kind::Converted | Kind::Inserted if self.clipboard_held => Some(CLIPBOARD_HELD),
+            Kind::Converted | Kind::Inserted | Kind::Nothing | Kind::Cancelled => None,
         }
     }
 }
@@ -92,7 +95,7 @@ mod tests {
     use ks_engine::{Failure, Refusal};
 
     /// Every outcome the engine can report as a refusal or failure.
-    const PROBLEMS: [Outcome; 18] = [
+    const PROBLEMS: [Outcome; 19] = [
         Outcome::Refused(Refusal::Password),
         Outcome::Refused(Refusal::Elevated),
         Outcome::Refused(Refusal::SecureDesktop),
@@ -107,6 +110,7 @@ mod tests {
         Outcome::Refused(Refusal::ForbiddenChars),
         Outcome::Refused(Refusal::Clipboard),
         Outcome::Refused(Refusal::ClipboardListener),
+        Outcome::Refused(Refusal::NotAvailable),
         Outcome::Failed(Failure::TargetChanged),
         Outcome::Failed(Failure::ModifiersHeld),
         Outcome::Failed(Failure::Read),
@@ -134,7 +138,8 @@ mod tests {
             verified: true,
             layout_switched: true,
         };
-        for outcome in [ok, Outcome::Nothing, Outcome::Cancelled] {
+        let inserted = Outcome::Inserted { verified: true };
+        for outcome in [ok, inserted, Outcome::Nothing, Outcome::Cancelled] {
             assert_eq!(LastOperation::new(outcome, false).notice_code(), None);
         }
         // A conversion that left the previous clipboard held is the one exception.

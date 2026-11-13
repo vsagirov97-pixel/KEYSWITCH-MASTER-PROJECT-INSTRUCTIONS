@@ -62,18 +62,20 @@ export type RefusalReason =
   | "UNSUPPORTED"
   | "FORBIDDEN_CHARS"
   | "CLIPBOARD_UNAVAILABLE"
-  | "CLIPBOARD_LISTENER";
+  | "CLIPBOARD_LISTENER"
+  | "NOT_AVAILABLE";
 
 /** A started operation stopped (`ks_engine::Failure`). Messages: `status.reason.<CODE>`. */
 export type FailureReason = "TARGET_CHANGED" | "MODIFIERS_HELD" | "READ_FAILED" | "WRITE_FAILED";
 
 /**
  * Result of the last hotkey operation as the backend reports it (command `last_operation`).
- * Codes and flags only. `code` is `CONVERTED`, `CONVERTED_UNVERIFIED`, `NOTHING`, `CANCELLED`,
+ * Codes and flags only. `code` is `CONVERTED`, `CONVERTED_UNVERIFIED`, `MACRO_INSERTED`,
+ * `MACRO_INSERTED_UNVERIFIED` (kind `inserted`), `NOTHING`, `CANCELLED`,
  * a `RefusalReason` (kind `refused`) or a `FailureReason` (kind `failed`).
  */
 export interface LastOperation {
-  kind: "converted" | "nothing" | "cancelled" | "refused" | "failed";
+  kind: "converted" | "inserted" | "nothing" | "cancelled" | "refused" | "failed";
   code: string;
   /** The clipboard from before the operation can still be restored from the tray menu. */
   clipboardHeld: boolean;

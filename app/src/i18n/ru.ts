@@ -115,6 +115,7 @@ export const ru = {
   "status.reason.MODIFIERS_HELD": "Отпустите клавиши и повторите.",
   "status.reason.READ_FAILED": "Не удалось прочитать текст.",
   "status.reason.WRITE_FAILED": "Не удалось заменить текст.",
+  "status.reason.NOT_AVAILABLE": "Эта функция пока недоступна.",
   "status.reason.CLIPBOARD_HELD": "Прежний буфер обмена сохранён на 2 минуты: меню значка, Вернуть буфер обмена.",
 
   "toast.label": "Ошибка",

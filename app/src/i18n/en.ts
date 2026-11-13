@@ -117,6 +117,7 @@ export const en: Record<MessageKey, string> = {
   "status.reason.MODIFIERS_HELD": "Release the keys and try again.",
   "status.reason.READ_FAILED": "The text could not be read.",
   "status.reason.WRITE_FAILED": "The text could not be replaced.",
+  "status.reason.NOT_AVAILABLE": "This feature is not available yet.",
   "status.reason.CLIPBOARD_HELD": "Previous clipboard kept for 2 minutes: tray menu, Restore clipboard.",
 
   "toast.label": "Error",
