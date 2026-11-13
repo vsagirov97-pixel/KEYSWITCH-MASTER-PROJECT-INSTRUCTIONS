@@ -138,6 +138,20 @@ e2r("short_en2ru", "phys", """я и в не на да он мы ты но за �
 r2e("short_ru2en", "phys", """i a is it to of in on we he me my no ok the and you are for not
 but yes can how why""".split())
 
+# Beta 2: short words (1-3 letters) in caret mode. Correct short words must stay; wrong-layout
+# short words should convert. One-letter words are ambiguous by nature (`a` is English, `ф`
+# is not a Russian word, but `f` -> `а` is): the numbers are measured, not assumed.
+SHORT_RU = """я в и а о у к с не на да он мы ты но за из по что как так все его для или вот где кто
+нет там она они это ещё уж же ли бы мой""".split()
+SHORT_EN = """a I to ok is it in on at of be we do go no so up me my he us an or if as by the and
+you are for not but yes can how why all any was has""".split()
+keep("short_keep_ru", SHORT_RU)
+keep("short_keep_en", SHORT_EN)
+e2r("short_fix_1letter", "phys", ["я", "в", "и", "а", "о", "у", "к", "с", "Я", "В", "И", "А"])
+r2e("short_fix_1letter", "phys", ["a", "I", "i"])
+e2r("short_fix_2_3", "phys", """уж же ли бы мой она они это ещё""".split())
+r2e("short_fix_2_3", "phys", """at be do go so up us an or if as by all any was has""".split())
+
 keep("keep_tech", [
     "https://example.com/path?q=1", "http://localhost:8080/api", "www.example.org",
     "ftp://files.example.net", "user@example.com", "test.user@mail.example", "example.com",
