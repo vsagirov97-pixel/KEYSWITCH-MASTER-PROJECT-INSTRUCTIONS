@@ -7,6 +7,8 @@
 //! only while the popup is open, at most [`TIMEOUT`].
 //!
 //! The popup shows language codes only — never the user's text.
+//!
+//! [`notice`] reuses the same kind of window for a brief refusal / error message.
 
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::{Duration, Instant};
@@ -207,4 +209,76 @@ fn wait(timer: usize, timeout: Duration, still_valid: &dyn Fn() -> bool) -> Answ
             unsafe { DispatchMessageW(&msg) };
         }
     }
+}
+
+/// How long a [`notice`] stays on screen.
+pub const NOTICE: Duration = Duration::from_millis(2500);
+
+/// Shows `text` for `duration` in a small topmost window that never takes activation, near
+/// the caret of the foreground window (or the mouse cursor). Returns at once: the window
+/// lives on its own short-lived thread. `text` is a reason message chosen by the caller —
+/// never user text.
+pub fn notice(text: &str, duration: Duration) {
+    let caption: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let chars = i32::try_from(text.chars().count()).unwrap_or(i32::MAX / 8);
+    let width = (chars.saturating_mul(7) + 28).clamp(120, 620);
+    let millis = u32::try_from(duration.as_millis()).unwrap_or(u32::MAX);
+    let _ = std::thread::Builder::new()
+        .name("ks-notice".into())
+        .spawn(move || {
+            // A NULL handle means "the foreground thread" for the caret lookup.
+            let (x, y) = anchor(Hwnd::from_isize(0));
+            // SAFETY: system class `STATIC`; `caption` is NUL-terminated and outlives the
+            // call; no parent, menu or creation data. The window belongs to this thread.
+            let created = unsafe {
+                CreateWindowExW(
+                    WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+                    w!("STATIC"),
+                    PCWSTR(caption.as_ptr()),
+                    WS_POPUP | WS_BORDER | WINDOW_STYLE(STATIC_CENTERED),
+                    x,
+                    y,
+                    width,
+                    HEIGHT,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            };
+            let Ok(hwnd) = created else {
+                return;
+            };
+            // SAFETY: stock font handle passed by value to our own window; SW_SHOWNOACTIVATE
+            // never changes the active window; a thread timer posts WM_TIMER to this queue.
+            let timer = unsafe {
+                let font = GetStockObject(DEFAULT_GUI_FONT);
+                SendMessageW(
+                    hwnd,
+                    WM_SETFONT,
+                    Some(windows::Win32::Foundation::WPARAM(font.0 as usize)),
+                    Some(windows::Win32::Foundation::LPARAM(1)),
+                );
+                let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+                SetTimer(None, 0, millis, None)
+            };
+            let mut msg = MSG::default();
+            loop {
+                // SAFETY: `msg` is a valid MSG buffer owned by this frame.
+                let r = unsafe { GetMessageW(&mut msg, None, 0, 0) }.0;
+                if r == 0 || r == -1 {
+                    break;
+                }
+                if msg.hwnd.0.is_null() && msg.message == WM_TIMER && msg.wParam.0 == timer {
+                    break;
+                }
+                // SAFETY: `msg` was filled by GetMessageW above.
+                unsafe { DispatchMessageW(&msg) };
+            }
+            // SAFETY: the timer and the window were created above by this thread.
+            unsafe {
+                let _ = KillTimer(None, timer);
+                let _ = DestroyWindow(hwnd);
+            }
+        });
 }

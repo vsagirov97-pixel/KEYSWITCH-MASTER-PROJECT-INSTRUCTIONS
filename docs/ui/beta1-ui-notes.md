@@ -35,8 +35,23 @@ autostart state is read from the `HKCU` `Run` key (not stored in the file).
 | `setHotkey(hotkey)` | `set_hotkey` | returns `{ok:true}` or `{ok:false,error:"invalid"\|"reserved"\|"conflict"}`; previous hotkey stays registered on failure |
 | `listExcludedApps` / `addExcludedApp` / `removeExcludedApp` | `list_/add_/remove_excluded_app` | backend re-validates the exe name (invalid name → rejected promise); `default` entries are not removable |
 | `getAppInfo` | `core_version` + `getVersion()` + `build_signed` | `build_signed` returns `false` in Beta 1 (unsigned) |
+| `getLastOperation` | `last_operation` | `null` before the first operation, else `{ kind, code, clipboardHeld }`: `kind` = `converted` \| `nothing` \| `cancelled` \| `refused` \| `failed`; `code` = backend outcome code (`CONVERTED`, `CONVERTED_UNVERIFIED`, `NOTHING`, `CANCELLED`, a `RefusalReason`, a `FailureReason`). Exposed only — no page renders it yet |
 
-`OperationOutcome` / `RefusalReason` carry reason codes only — no type on the boundary can hold user text.
+`OperationOutcome` / `RefusalReason` / `FailureReason` / `LastOperation` carry reason codes only — no type on
+the boundary can hold user text.
+
+### Operation feedback (backend, BL-WIN-B1 step 2)
+
+- No success notice. Only a refused or failed operation (and the "clipboard kept" hint, code `CLIPBOARD_HELD`)
+  produces feedback: the reason message is appended to the tray tooltip and shown for 2.5 s in a small
+  non-activating topmost window near the caret (`ks_platform_win::popup::notice`).
+- The message texts are the UI's: the backend reads `status.reason.<CODE>` from `app/src/i18n/{ru,en}.ts` at
+  compile time (`app/src-tauri/src/feedback.rs`). A backend test fails if a refusal / failure code has no
+  message in either language, so a new code needs a new i18n key. Keep these values plain one-line strings
+  (no escapes). The wording of the keys added for the backend codes needs designer review.
+- Tray menu: the item "Restore clipboard" (command id 8) appears only while the clipboard from before an
+  unconfirmed clipboard paste is held (D-26, at most 120 s). It is **not yet mirrored** in `app/src/tray/model.ts`.
+- The language-choice popup is a native OS window (keys 1 / 2 / Esc, 10 s), not the `LanguagePicker` component.
 
 ## Deviations and simplest-option choices (need designer/owner confirmation)
 

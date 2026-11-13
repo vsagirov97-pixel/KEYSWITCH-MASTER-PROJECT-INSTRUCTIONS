@@ -106,6 +106,18 @@ export const en: Record<MessageKey, string> = {
   "status.reason.TOO_LONG": "The text is too long.",
   "status.reason.LOW_CONFIDENCE": "The layout could not be detected with confidence.",
   "status.reason.MIXED_CANCELLED": "Language choice was cancelled.",
+  "status.reason.SELF_TARGET": "This is a KeySwitch window.",
+  "status.reason.CONSOLE": "Console windows are not supported.",
+  "status.reason.MIXED": "The text mixes several languages.",
+  "status.reason.UNSUPPORTED": "This field is not supported.",
+  "status.reason.FORBIDDEN_CHARS": "The text contains line breaks or control characters.",
+  "status.reason.CLIPBOARD_UNAVAILABLE": "The clipboard cannot be used safely right now.",
+  "status.reason.CLIPBOARD_LISTENER": "Another program accessed the clipboard. Nothing was changed.",
+  "status.reason.TARGET_CHANGED": "The window or field changed. Nothing more was changed.",
+  "status.reason.MODIFIERS_HELD": "Release the keys and try again.",
+  "status.reason.READ_FAILED": "The text could not be read.",
+  "status.reason.WRITE_FAILED": "The text could not be replaced.",
+  "status.reason.CLIPBOARD_HELD": "Previous clipboard kept for 2 minutes: tray menu, Restore clipboard.",
 
   "toast.label": "Error",
 

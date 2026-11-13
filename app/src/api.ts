@@ -41,7 +41,12 @@ export interface AppInfo {
   signed: boolean;
 }
 
-/** Reason codes from pa-prd.md (US-05, US-06, FR-SCOPE-7). */
+/**
+ * Reason codes from pa-prd.md (US-05, US-06, FR-SCOPE-7) plus the codes of the Windows
+ * backend (`ks_engine::Refusal`). Every code has a `status.reason.<CODE>` message.
+ * `MIXED_CANCELLED` is UI-only: the backend reports a dismissed language choice as the
+ * outcome `CANCELLED`, which is not a refusal and produces no notice.
+ */
 export type RefusalReason =
   | "PASSWORD"
   | "ELEVATED"
@@ -50,7 +55,29 @@ export type RefusalReason =
   | "READ_ONLY"
   | "TOO_LONG"
   | "LOW_CONFIDENCE"
-  | "MIXED_CANCELLED";
+  | "MIXED_CANCELLED"
+  | "SELF_TARGET"
+  | "CONSOLE"
+  | "MIXED"
+  | "UNSUPPORTED"
+  | "FORBIDDEN_CHARS"
+  | "CLIPBOARD_UNAVAILABLE"
+  | "CLIPBOARD_LISTENER";
+
+/** A started operation stopped (`ks_engine::Failure`). Messages: `status.reason.<CODE>`. */
+export type FailureReason = "TARGET_CHANGED" | "MODIFIERS_HELD" | "READ_FAILED" | "WRITE_FAILED";
+
+/**
+ * Result of the last hotkey operation as the backend reports it (command `last_operation`).
+ * Codes and flags only. `code` is `CONVERTED`, `CONVERTED_UNVERIFIED`, `NOTHING`, `CANCELLED`,
+ * a `RefusalReason` (kind `refused`) or a `FailureReason` (kind `failed`).
+ */
+export interface LastOperation {
+  kind: "converted" | "nothing" | "cancelled" | "refused" | "failed";
+  code: string;
+  /** The clipboard from before the operation can still be restored from the tray menu. */
+  clipboardHeld: boolean;
+}
 
 export type OperationOutcome =
   | { kind: "converted" }
@@ -69,6 +96,8 @@ export interface KeySwitchApi {
   addExcludedApp(exe: string): Promise<ExcludedApp[]>;
   removeExcludedApp(exe: string): Promise<ExcludedApp[]>;
   getAppInfo(): Promise<AppInfo>;
+  /** `null` until the first operation since start. */
+  getLastOperation(): Promise<LastOperation | null>;
 }
 
 function createApi(): KeySwitchApi {
@@ -92,6 +121,7 @@ function createApi(): KeySwitchApi {
       ]);
       return { version, coreVersion, signed };
     },
+    getLastOperation: () => invoke<LastOperation | null>("last_operation"),
   };
 }
 

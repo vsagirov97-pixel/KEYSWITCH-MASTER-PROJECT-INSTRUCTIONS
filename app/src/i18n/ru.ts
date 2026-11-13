@@ -104,6 +104,18 @@ export const ru = {
   "status.reason.TOO_LONG": "Текст слишком длинный.",
   "status.reason.LOW_CONFIDENCE": "Не удалось уверенно определить раскладку.",
   "status.reason.MIXED_CANCELLED": "Выбор языка отменён.",
+  "status.reason.SELF_TARGET": "Это окно KeySwitch.",
+  "status.reason.CONSOLE": "Консольные окна не поддерживаются.",
+  "status.reason.MIXED": "В тексте смешано несколько языков.",
+  "status.reason.UNSUPPORTED": "Это поле не поддерживается.",
+  "status.reason.FORBIDDEN_CHARS": "В тексте есть переносы строк или управляющие символы.",
+  "status.reason.CLIPBOARD_UNAVAILABLE": "Буфер обмена сейчас нельзя использовать безопасно.",
+  "status.reason.CLIPBOARD_LISTENER": "Другая программа обратилась к буферу обмена. Ничего не изменено.",
+  "status.reason.TARGET_CHANGED": "Окно или поле изменилось. Больше ничего не изменено.",
+  "status.reason.MODIFIERS_HELD": "Отпустите клавиши и повторите.",
+  "status.reason.READ_FAILED": "Не удалось прочитать текст.",
+  "status.reason.WRITE_FAILED": "Не удалось заменить текст.",
+  "status.reason.CLIPBOARD_HELD": "Прежний буфер обмена сохранён на 2 минуты: меню значка, Вернуть буфер обмена.",
 
   "toast.label": "Ошибка",
 

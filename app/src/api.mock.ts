@@ -79,5 +79,8 @@ export function createMockApi(): KeySwitchApi {
     async getAppInfo() {
       return { version: appVersion, coreVersion: "mock", signed: false };
     },
+    async getLastOperation() {
+      return null;
+    },
   };
 }

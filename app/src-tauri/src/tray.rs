@@ -20,6 +20,7 @@ struct Labels {
     paused_until: &'static str,
     paused_until_restart: &'static str,
     settings: &'static str,
+    restore_clipboard: &'static str,
     quit: &'static str,
     status_active: &'static str,
     status_paused: &'static str,
@@ -38,6 +39,7 @@ fn labels(language: UiLanguage) -> Labels {
             paused_until: "Приостановлено до",
             paused_until_restart: "Приостановлено до перезапуска",
             settings: "Настройки",
+            restore_clipboard: "Вернуть буфер обмена",
             quit: "Выход",
             status_active: "активно",
             status_paused: "приостановлено",
@@ -53,6 +55,7 @@ fn labels(language: UiLanguage) -> Labels {
             paused_until: "Paused until",
             paused_until_restart: "Paused until restart",
             settings: "Settings",
+            restore_clipboard: "Restore clipboard",
             quit: "Quit",
             status_active: "active",
             status_paused: "paused",
@@ -69,6 +72,8 @@ const CMD_PAUSE_UNTIL_RESTART: u32 = 4;
 const CMD_RESUME: u32 = 5;
 const CMD_SETTINGS: u32 = 6;
 const CMD_QUIT: u32 = 7;
+/// Shown only while a clipboard snapshot is held after an unconfirmed paste (D-26).
+const CMD_RESTORE_CLIPBOARD: u32 = 8;
 /// Information line (disabled).
 const CMD_INFO: u32 = 100;
 
@@ -112,6 +117,12 @@ fn build_model(shared: &Shared) -> TrayModel {
             menu.push(item(CMD_RESUME, l.resume));
         }
     }
+    if shared.worker.get().is_some_and(os::clipboard_held) {
+        menu.extend([
+            TrayEntry::Separator,
+            item(CMD_RESTORE_CLIPBOARD, l.restore_clipboard),
+        ]);
+    }
     menu.extend([
         TrayEntry::Separator,
         item(CMD_SETTINGS, l.settings),
@@ -127,10 +138,14 @@ fn build_model(shared: &Shared) -> TrayModel {
         l.status_active
     };
     let mut tooltip = format!("KeySwitch — {status} · {hotkey}");
-    // Last operation result: a reason code only, never text.
-    if let Some(code) = *lock(&shared.last_outcome) {
+    // Last operation: shown only when it was refused or failed — a reason message from
+    // the UI dictionary, never text from the user's application.
+    let reason = (*lock(&shared.last_outcome))
+        .and_then(|last| last.notice_code())
+        .and_then(|code| crate::feedback::text(language, code));
+    if let Some(reason) = reason {
         tooltip.push_str(" · ");
-        tooltip.push_str(code);
+        tooltip.push_str(reason);
     }
     TrayModel { tooltip, menu }
 }
@@ -170,6 +185,11 @@ fn on_event(app: &AppHandle, shared: &Arc<Shared>, event: TrayEvent) {
         TrayEvent::Command(CMD_PAUSE_1H) => pause_for(shared, 60),
         TrayEvent::Command(CMD_PAUSE_UNTIL_RESTART) => shared.set_pause(Pause::UntilRestart),
         TrayEvent::Command(CMD_RESUME) => shared.set_pause(Pause::Active),
+        TrayEvent::Command(CMD_RESTORE_CLIPBOARD) => {
+            if let Some(worker) = shared.worker.get() {
+                let _ = os::restore_clipboard(worker);
+            }
+        }
         TrayEvent::Command(CMD_QUIT) => {
             shared.set_pause(Pause::UntilRestart);
             app.exit(0);

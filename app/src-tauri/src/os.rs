@@ -69,6 +69,22 @@ mod imp {
         worker.cancel();
     }
 
+    /// `true` while the clipboard from before an unconfirmed paste can be restored.
+    pub fn clipboard_held(worker: &Worker) -> bool {
+        worker.clipboard_held()
+    }
+
+    /// The user's explicit "restore clipboard" action; `true` if it was put back.
+    pub fn restore_clipboard(worker: &Worker) -> bool {
+        worker.restore_clipboard() == ks_platform_win::w2::HoldRestore::Restored
+    }
+
+    /// Brief non-activating notice near the caret. `text` is a reason message, never user
+    /// text.
+    pub fn notice(text: &str) {
+        ks_platform_win::popup::notice(text, ks_platform_win::popup::NOTICE);
+    }
+
     pub fn register_hotkey(
         mods: u32,
         vk: u32,
@@ -157,6 +173,13 @@ mod imp {
     }
     pub fn trigger(_worker: &Worker) {}
     pub fn cancel(_worker: &Worker) {}
+    pub fn clipboard_held(_worker: &Worker) -> bool {
+        false
+    }
+    pub fn restore_clipboard(_worker: &Worker) -> bool {
+        false
+    }
+    pub fn notice(_text: &str) {}
     pub fn register_hotkey(
         _mods: u32,
         _vk: u32,

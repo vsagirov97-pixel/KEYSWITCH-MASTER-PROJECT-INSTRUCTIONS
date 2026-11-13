@@ -5,6 +5,7 @@
 //! settings persistence, autostart. All text handling happens in `ks-engine` /
 //! `ks-platform-win`; nothing on the IPC boundary can carry user text.
 
+mod feedback;
 mod hotkey;
 mod os;
 mod settings;
@@ -46,8 +47,8 @@ struct Shared {
     registration: Mutex<Option<os::Registration>>,
     worker: OnceLock<os::Worker>,
     tray: OnceLock<os::Tray>,
-    /// Reason code of the last operation (never text).
-    last_outcome: Mutex<Option<&'static str>>,
+    /// Result of the last operation: codes only, never text.
+    last_outcome: Mutex<Option<feedback::LastOperation>>,
 }
 
 impl Shared {
@@ -228,6 +229,18 @@ fn remove_excluded_app(shared: Ctx<'_>, exe: String) -> Result<Vec<ExcludedApp>,
     Ok(excluded_list(&lock(&shared.stored)))
 }
 
+/// Result of the last operation for the settings UI: codes only (`null` before the first).
+#[tauri::command]
+fn last_operation(shared: Ctx<'_>) -> Option<feedback::LastOperation> {
+    let mut last = *lock(&shared.last_outcome);
+    if let Some(last) = last.as_mut() {
+        // The hold expires on its own: report the current state, not the one at the end
+        // of the operation.
+        last.clipboard_held = shared.worker.get().is_some_and(os::clipboard_held);
+    }
+    last
+}
+
 fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, background: bool) {
     // A second launch asks the running instance to show its window.
     let handle = app.clone();
@@ -252,7 +265,14 @@ fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, backgrou
         },
         move |outcome| {
             if let Some(shared) = for_outcome.upgrade() {
-                *lock(&shared.last_outcome) = Some(outcome.code());
+                let held = shared.worker.get().is_some_and(os::clipboard_held);
+                let last = feedback::LastOperation::new(outcome, held);
+                *lock(&shared.last_outcome) = Some(last);
+                // Feedback only when something went wrong (no success notice).
+                let language = lock(&shared.stored).ui_language;
+                if let Some(text) = last.notice_code().and_then(|c| feedback::text(language, c)) {
+                    os::notice(text);
+                }
                 tray::refresh(&shared);
             }
         },
@@ -299,7 +319,8 @@ fn main() {
             set_hotkey,
             list_excluded_apps,
             add_excluded_app,
-            remove_excluded_app
+            remove_excluded_app,
+            last_operation
         ])
         .setup(move |app| {
             if let Some(instance) = instance.take() {
