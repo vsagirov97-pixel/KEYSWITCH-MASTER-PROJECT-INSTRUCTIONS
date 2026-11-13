@@ -21,7 +21,7 @@ use windows::Win32::UI::Accessibility::{
     IUIAutomationTextRange, TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start,
     TextUnit_Character, UIA_TextPatternId,
 };
-use windows::core::Interface;
+use windows::core::{BSTR, Interface};
 
 use crate::Hwnd;
 
@@ -199,9 +199,13 @@ impl Uia {
         if sel.len() != 1 {
             return Ok(false);
         }
-        let max =
-            i32::try_from(expected.encode_utf16().count().saturating_add(1)).unwrap_or(i32::MAX);
-        if range_text(&sel[0], max)? != expected {
+        // QA-B1-09: compared in place, no `String` copy; both buffers are wiped.
+        let mut want: Vec<u16> = expected.encode_utf16().collect();
+        let max = i32::try_from(want.len().saturating_add(1)).unwrap_or(i32::MAX);
+        let same = range_equals(&sel[0], max, &want);
+        want.fill(0);
+        std::hint::black_box(&want);
+        if !same? {
             return Ok(false);
         }
         // SAFETY: method calls on live interfaces; `r` is a fresh clone we own.
@@ -404,12 +408,43 @@ pub fn text_pattern(el: &IUIAutomationElement) -> Option<IUIAutomationTextPatter
 }
 
 /// `GetText(max)` on a range (counted). Private: callers go through the guarded readers.
+/// The returned BSTR is wiped before it is freed; the `String` is the caller's to protect.
 fn range_text(r: &IUIAutomationTextRange, max: i32) -> Result<String, String> {
+    let b = range_bstr(r, max)?;
+    // Capacity up front (one UTF-16 unit is at most 3 UTF-8 bytes): no reallocation leaves
+    // an unwiped copy behind.
+    let mut s = String::with_capacity(b.len().saturating_mul(3));
+    s.extend(char::decode_utf16(b.iter().copied()).map(|c| c.unwrap_or('\u{FFFD}')));
+    wipe_bstr(b);
+    Ok(s)
+}
+
+/// `true` if `GetText(max)` of `r` equals `want` (UTF-16). No copy of the text is made;
+/// the BSTR is wiped before it is freed.
+fn range_equals(r: &IUIAutomationTextRange, max: i32, want: &[u16]) -> Result<bool, String> {
+    let b = range_bstr(r, max)?;
+    let same = *b == *want;
+    wipe_bstr(b);
+    Ok(same)
+}
+
+fn range_bstr(r: &IUIAutomationTextRange, max: i32) -> Result<BSTR, String> {
     GET_TEXT_CALLS.fetch_add(1, Ordering::SeqCst);
-    // SAFETY: method call on a live interface; the BSTR is owned and freed on drop.
-    unsafe { r.GetText(max) }
-        .map(|b| b.to_string())
-        .map_err(|e| format!("GetText: {e}"))
+    // SAFETY: method call on a live interface; the BSTR is owned by us.
+    unsafe { r.GetText(max) }.map_err(|e| format!("GetText: {e}"))
+}
+
+/// Overwrites the characters of a BSTR that held user text, then frees it.
+fn wipe_bstr(b: BSTR) {
+    let units = b.len();
+    let raw = b.into_raw().cast_mut();
+    if !raw.is_null() && units > 0 {
+        // SAFETY: `raw` is the allocation of the BSTR we owned (returned to us by GetText);
+        // `units` (`SysStringLen`) characters lie inside it; nothing else references it.
+        unsafe { std::ptr::write_bytes(raw, 0, units) };
+    }
+    // SAFETY: reassembles the BSTR taken apart above, so it is freed by `SysFreeString`.
+    drop(unsafe { BSTR::from_raw(raw) });
 }
 
 /// Current selection ranges.
