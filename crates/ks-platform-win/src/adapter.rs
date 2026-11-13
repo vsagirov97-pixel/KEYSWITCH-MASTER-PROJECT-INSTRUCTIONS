@@ -110,9 +110,12 @@ impl<'a> WinPlatform<'a> {
         self.settled
     }
 
-    /// Post-check: `true` if the text right before the caret now equals `expected`.
+    /// Post-check: `true` if the text right before the caret now equals `expected`, every
+    /// line break counted as one form (k03: a classic multi-line `Edit` reports a written
+    /// `\r\n` differently, and may count it as one character when moving by characters).
     fn verify_by_uia(&self, expected: &UserText) -> bool {
-        let units = units_i32(expected.utf16_len());
+        let breaks = expected.expose().matches("\r\n").count();
+        let units = units_i32(expected.utf16_len().saturating_add(breaks));
         let start = Instant::now();
         loop {
             let Ok(t) = self.checked() else {
@@ -123,7 +126,7 @@ impl<'a> WinPlatform<'a> {
             // before the write.
             if let Some(element) = self.fresh_element(t.fp.pid)
                 && let Ok(Some(now)) = text_of(self.uia.read_before_caret(&element, units))
-                && now.same_as(expected)
+                && now.ends_with_ignoring_line_breaks(expected)
             {
                 return true;
             }

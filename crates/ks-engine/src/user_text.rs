@@ -32,6 +32,29 @@ impl UserText {
     pub fn same_as(&self, other: &UserText) -> bool {
         self.0 == other.0
     }
+
+    /// `true` if the text ends with `suffix` when every line break (`\r\n`, `\r`, `\n`)
+    /// counts as one `\n`. Controls report a written `\r\n` in different forms.
+    pub fn ends_with_ignoring_line_breaks(&self, suffix: &UserText) -> bool {
+        let (a, b) = (unify_breaks(&self.0), unify_breaks(&suffix.0));
+        a.0.ends_with(&b.0)
+    }
+}
+
+/// Copy of `s` with every line break as `\n`; wiped on drop like any `UserText`.
+fn unify_breaks(s: &str) -> UserText {
+    // Capacity up front: no reallocation leaves an unwiped copy behind.
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\r' {
+            chars.next_if_eq(&'\n');
+            out.push('\n');
+        } else {
+            out.push(c);
+        }
+    }
+    UserText::new(out)
 }
 
 impl Drop for UserText {
@@ -51,6 +74,16 @@ pub fn wipe(text: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn line_breaks_are_compared_as_one_form() {
+        let t = |s: &str| UserText::new(s.into());
+        assert!(t("abc привет\r\nмир").ends_with_ignoring_line_breaks(&t("привет\r\nмир")));
+        assert!(t(" привет\rмир").ends_with_ignoring_line_breaks(&t("привет\r\nмир")));
+        assert!(t("привет\nмир").ends_with_ignoring_line_breaks(&t("привет\r\nмир")));
+        assert!(!t("привет мир").ends_with_ignoring_line_breaks(&t("привет\r\nмир")));
+        assert!(!t("мир").ends_with_ignoring_line_breaks(&t("привет\nмир")));
+    }
 
     #[test]
     fn lengths_are_utf16_units() {

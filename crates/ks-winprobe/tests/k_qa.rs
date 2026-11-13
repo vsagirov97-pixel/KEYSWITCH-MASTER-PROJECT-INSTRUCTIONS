@@ -272,6 +272,9 @@ fn k03_multiline_selection_keeps_line_break() {
     if is_converted(o) && !converted {
         problems.push("outcome CONVERTED but the content is not the expected text");
     }
+    if converted && !is_verified(o) {
+        problems.push("converted correctly but the post-check did not confirm it");
+    }
     if !is_converted(o) && !unchanged {
         problems.push("outcome is not CONVERTED but the field changed");
     }
