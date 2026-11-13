@@ -7,6 +7,7 @@
 
 mod feedback;
 mod hotkey;
+mod macro_slot;
 mod os;
 mod settings;
 mod tray;
@@ -19,6 +20,7 @@ use serde::Serialize;
 use tauri::{AppHandle, State, WindowEvent};
 
 use hotkey::{Hotkey, Invalid};
+use macro_slot::MacroSlot;
 use settings::{DEFAULT_EXCLUDED, MAX_USER_EXCLUDED, Stored, Theme, UiLanguage};
 
 /// Locks a mutex, ignoring poisoning (the guarded data are plain settings).
@@ -45,6 +47,8 @@ struct Shared {
     pause: Mutex<Pause>,
     /// The registered global hotkey; `None` = registration failed (tray shows "attention").
     registration: Mutex<Option<os::Registration>>,
+    /// The registered macro hotkey; `None` = slot off, no hotkey, or registration failed.
+    macro_registration: Mutex<Option<os::Registration>>,
     worker: OnceLock<os::Worker>,
     tray: OnceLock<os::Tray>,
     /// Result of the last operation: codes only, never text.
@@ -76,26 +80,51 @@ impl Shared {
     }
 }
 
-/// Registers `hotkey` as the global hotkey. On failure the previous registration stays.
-fn register_hotkey(shared: &Arc<Shared>, hotkey: &Hotkey) -> Result<(), &'static str> {
+/// `RegisterHotKey` for `hotkey`; every press calls `on_press` with the worker.
+fn register_chord(
+    shared: &Arc<Shared>,
+    hotkey: &Hotkey,
+    on_press: fn(&os::Worker),
+) -> Result<os::Registration, &'static str> {
     let chord = hotkey.to_chord().map_err(|e| match e {
         Invalid::Invalid => "invalid",
         Invalid::Reserved => "reserved",
     })?;
     let weak = Arc::downgrade(shared);
-    let registration = os::register_hotkey(chord.mods, chord.vk, move || {
+    os::register_hotkey(chord.mods, chord.vk, move || {
         if let Some(shared) = weak.upgrade()
             && let Some(worker) = shared.worker.get()
         {
-            os::trigger(worker);
+            on_press(worker);
         }
     })
     .map_err(|e| match e {
         os::HotkeyFailure::Conflict => "conflict",
         os::HotkeyFailure::Other => "invalid",
-    })?;
+    })
+}
+
+/// Registers `hotkey` as the global hotkey. On failure the previous registration stays.
+fn register_hotkey(shared: &Arc<Shared>, hotkey: &Hotkey) -> Result<(), &'static str> {
+    let registration = register_chord(shared, hotkey, os::trigger)?;
     // Replacing the value drops (unregisters) the previous hotkey.
     *lock(&shared.registration) = Some(registration);
+    Ok(())
+}
+
+/// Registers the hotkey of an enabled macro slot (or releases it for a disabled one). The
+/// conversion hotkey always wins: the same combination is a conflict. On failure the
+/// previous registration stays.
+fn register_macro_hotkey(shared: &Arc<Shared>, slot: &MacroSlot) -> Result<(), &'static str> {
+    let Some(hotkey) = slot.active_hotkey() else {
+        *lock(&shared.macro_registration) = None;
+        return Ok(());
+    };
+    if *hotkey == lock(&shared.stored).hotkey {
+        return Err("conflict");
+    }
+    let registration = register_chord(shared, hotkey, os::trigger_macro)?;
+    *lock(&shared.macro_registration) = Some(registration);
     Ok(())
 }
 
@@ -181,6 +210,14 @@ fn set_theme(shared: Ctx<'_>, theme: Theme) -> Result<(), String> {
 #[tauri::command]
 fn set_hotkey(shared: Ctx<'_>, hotkey: Hotkey) -> HotkeyResult {
     let unchanged = lock(&shared.stored).hotkey == hotkey && lock(&shared.registration).is_some();
+    let macro_owned = lock(&shared.stored).macro_slot.active_hotkey() == Some(&hotkey);
+    if macro_owned {
+        // The macro slot already uses this combination.
+        return HotkeyResult {
+            ok: false,
+            error: Some("conflict"),
+        };
+    }
     if !unchanged {
         if let Err(error) = register_hotkey(&shared, &hotkey) {
             return HotkeyResult {
@@ -229,6 +266,70 @@ fn remove_excluded_app(shared: Ctx<'_>, exe: String) -> Result<Vec<ExcludedApp>,
     Ok(excluded_list(&lock(&shared.stored)))
 }
 
+/// The Macro Studio slot as the UI edits it, plus backend facts.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MacroSlotDto {
+    #[serde(flatten)]
+    slot: MacroSlot,
+    /// The slot's hotkey is registered right now.
+    registered: bool,
+    /// Test run from the editor: not available in this step.
+    test_run_available: bool,
+}
+
+#[derive(Serialize)]
+struct MacroSlotResult {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<&'static str>,
+}
+
+#[tauri::command]
+fn get_macro_slot(shared: Ctx<'_>) -> MacroSlotDto {
+    MacroSlotDto {
+        slot: lock(&shared.stored).macro_slot.clone(),
+        registered: lock(&shared.macro_registration).is_some(),
+        test_run_available: false,
+    }
+}
+
+/// Validates and stores the slot and (re-)registers its hotkey. On a validation or
+/// registration error nothing changes (the previous slot and registration stay);
+/// `save_failed` means the slot is active but not persisted.
+#[tauri::command]
+fn set_macro_slot(shared: Ctx<'_>, slot: MacroSlot) -> MacroSlotResult {
+    let fail = |error| MacroSlotResult {
+        ok: false,
+        error: Some(error),
+    };
+    if let Err(error) = macro_slot::validate(&slot) {
+        return fail(error);
+    }
+    let (same_hotkey, registered) = {
+        let stored = lock(&shared.stored);
+        (
+            stored.macro_slot.active_hotkey() == slot.active_hotkey(),
+            lock(&shared.macro_registration).is_some(),
+        )
+    };
+    let needs_registration = slot.active_hotkey().is_some() && !registered;
+    if (!same_hotkey || needs_registration)
+        && let Err(error) = register_macro_hotkey(&shared, &slot)
+    {
+        return fail(error);
+    }
+    lock(&shared.stored).macro_slot = slot;
+    if shared.save().is_err() {
+        // The slot is active in memory but would be lost at the next start.
+        return fail("save_failed");
+    }
+    MacroSlotResult {
+        ok: true,
+        error: None,
+    }
+}
+
 /// Result of the last operation for the settings UI: codes only (`null` before the first).
 #[tauri::command]
 fn last_operation(shared: Ctx<'_>) -> Option<feedback::LastOperation> {
@@ -252,6 +353,7 @@ fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, backgrou
 
     let for_config = Arc::downgrade(shared);
     let for_outcome = Arc::downgrade(shared);
+    let for_macro = Arc::downgrade(shared);
     let worker = os::spawn_worker(
         move || {
             let shared = for_config.upgrade()?;
@@ -262,6 +364,10 @@ fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, backgrou
                 excluded: lock(&shared.stored).excluded_all(),
                 ..ks_engine::Config::default()
             })
+        },
+        move || {
+            let shared = for_macro.upgrade()?;
+            lock(&shared.stored).macro_slot.to_macro()
         },
         move |outcome| {
             if let Some(shared) = for_outcome.upgrade() {
@@ -283,6 +389,9 @@ fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, backgrou
     let hotkey = lock(&shared.stored).hotkey.clone();
     // A conflict at start-up is shown as the tray status "needs attention".
     let _ = register_hotkey(shared, &hotkey);
+    // A macro hotkey that cannot be registered shows as `registered: false` in the editor.
+    let slot = lock(&shared.stored).macro_slot.clone();
+    let _ = register_macro_hotkey(shared, &slot);
     tray::create(app, shared);
     if !background {
         tray::show_window(app);
@@ -301,6 +410,7 @@ fn main() {
         path,
         pause: Mutex::new(Pause::Active),
         registration: Mutex::new(None),
+        macro_registration: Mutex::new(None),
         worker: OnceLock::new(),
         tray: OnceLock::new(),
         last_outcome: Mutex::new(None),
@@ -320,6 +430,8 @@ fn main() {
             list_excluded_apps,
             add_excluded_app,
             remove_excluded_app,
+            get_macro_slot,
+            set_macro_slot,
             last_operation
         ])
         .setup(move |app| {

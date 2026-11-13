@@ -1,12 +1,14 @@
 //! Settings model and persistence: one JSON file under `%APPDATA%\KeySwitch` written with
 //! `std::fs` (no Tauri `fs` plugin, nothing reachable from the WebView). Holds preferences
-//! only — never user text.
+//! and the Macro Studio slot (the user's own macro text, see [`crate::macro_slot`]) — never
+//! text read from another application.
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::hotkey::Hotkey;
+use crate::macro_slot::MacroSlot;
 
 /// UI language (`uiLanguage` on the UI boundary).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +49,8 @@ pub struct Stored {
     pub theme: Theme,
     /// User-added excluded executables (lower-cased file names).
     pub excluded_user: Vec<String>,
+    /// The single Macro Studio slot (MVP).
+    pub macro_slot: MacroSlot,
 }
 
 impl Default for Stored {
@@ -56,6 +60,7 @@ impl Default for Stored {
             ui_language: UiLanguage::Ru,
             theme: Theme::System,
             excluded_user: Vec::new(),
+            macro_slot: MacroSlot::default(),
         }
     }
 }
@@ -77,6 +82,7 @@ impl Stored {
             }
         }
         self.excluded_user = seen;
+        self.macro_slot = std::mem::take(&mut self.macro_slot).sanitized();
         self
     }
 

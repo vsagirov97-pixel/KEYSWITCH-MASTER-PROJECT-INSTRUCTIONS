@@ -10,13 +10,21 @@
 //! control/format characters). For an application with a row in [`profiles`] the write goes
 //! through W2 (clipboard paste, [`w2`]) instead of W3, and a focused element without
 //! TextPattern is read through Ctrl+C — the selection only.
+//!
+//! The same platform serves macros ([`ks_engine::run_macro`]): a macro text with `\n` / `\t`
+//! (permitted by its slot) can only be written by W1 into a multi-line `Edit` or by W2 into a
+//! profiled application; W3 refuses it (no Enter / Tab key is ever sent). Line breaks are
+//! written as `\r\n`, the native form of `Edit` and of `CF_UNICODETEXT`.
 
 use std::cell::Cell;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use ks_engine::{Choice, Config, Failure, Outcome, Platform, Refusal, Stop, TargetInfo, UserText};
+use ks_engine::{
+    Choice, Config, Failure, Macro, MacroRunner, Outcome, Platform, Refusal, Stop, TargetInfo,
+    UserText,
+};
 use windows::Win32::UI::Accessibility::IUIAutomationElement;
 
 use crate::gate::{self, CaptureError, Fingerprint, Gate, Token};
@@ -62,6 +70,8 @@ struct Target {
     copy_read: bool,
     /// The profile's paste signal was confirmed on the real application.
     signal_confirmed: bool,
+    /// W1 target with `ES_MULTILINE` (may receive line breaks).
+    multiline: bool,
 }
 
 /// What the post-check saw on its last attempt. Lengths and flags only, never text.
@@ -179,7 +189,9 @@ impl<'a> WinPlatform<'a> {
                 self.note(|v| v.last_step = "target_changed");
                 return false;
             };
-            match edit::text_before_caret_is(t.fp.focus, expected.expose()) {
+            let native = crlf(expected);
+            let want = native.as_ref().unwrap_or(expected);
+            match edit::text_before_caret_is(t.fp.focus, want.expose()) {
                 Some(true) => {
                     self.note(|v| v.last_step = "edit_ok");
                     return true;
@@ -201,7 +213,9 @@ impl<'a> WinPlatform<'a> {
     /// line break counted as one form.
     fn verify_by_uia(&self, expected: &UserText) -> bool {
         let breaks = expected.expose().matches("\r\n").count();
-        let requested = expected.utf16_len();
+        // Room for a target that reports every line break as `\r\n`: the comparison only
+        // looks at the end of what was read.
+        let requested = expected.utf16_len() + expected.expose().matches('\n').count();
         let units = units_i32(requested);
         self.note(|v| {
             v.expected_units = expected.utf16_len();
@@ -394,6 +408,26 @@ fn clipboard_stop(e: W2Error, failure: Failure) -> Stop {
     }
 }
 
+/// `text` with every lone `\n` written as `\r\n` (the line break of `Edit` controls and of
+/// `CF_UNICODETEXT`); `None` if there is none. The copy is a `UserText` (wiped on drop).
+fn crlf(text: &UserText) -> Option<UserText> {
+    let s = text.expose();
+    if !s.contains('\n') {
+        return None;
+    }
+    // Capacity up front: no reallocation leaves an unwiped copy behind.
+    let mut out = String::with_capacity(s.len() + s.matches('\n').count());
+    let mut prev = '\0';
+    for c in s.chars() {
+        if c == '\n' && prev != '\r' {
+            out.push('\r');
+        }
+        out.push(c);
+        prev = c;
+    }
+    Some(UserText::new(out))
+}
+
 fn units_i32(units: usize) -> i32 {
     i32::try_from(units).unwrap_or(i32::MAX)
 }
@@ -478,6 +512,7 @@ impl Platform for WinPlatform<'_> {
             method,
             copy_read,
             signal_confirmed: profile.is_some_and(|p| p.signal_confirmed),
+            multiline: style & policy::ES_MULTILINE != 0,
         });
         Ok(TargetInfo { exe })
     }
@@ -532,8 +567,14 @@ impl Platform for WinPlatform<'_> {
 
     fn write(&mut self, text: &UserText) -> Result<(), Stop> {
         let t = self.checked()?;
+        let native = crlf(text);
         match t.method {
+            // A single-line `Edit` has no line breaks: refuse rather than mangle the text.
+            Method::W1 if native.is_some() && !t.multiline => {
+                Err(Stop::Refused(Refusal::ForbiddenChars))
+            }
             Method::W1 => {
+                let text = native.as_ref().unwrap_or(text);
                 if edit::replace_selection(t.fp.focus, text.expose()) {
                     Ok(())
                 } else {
@@ -544,7 +585,10 @@ impl Platform for WinPlatform<'_> {
             Method::W2 => {
                 let (fp, gate, token) = (t.fp, self.gate, self.token);
                 let check = move || gate::pre_batch(&fp, gate, token);
-                match self.clip.paste(fp.pid, text, &check) {
+                match self
+                    .clip
+                    .paste(fp.pid, native.as_ref().unwrap_or(text), &check)
+                {
                     Ok(()) => Ok(()),
                     // A listener rendered before Ctrl+V: nothing was pasted and the
                     // clipboard is back. §4.1 p.3: W3 if the text allows it, else refuse.
@@ -610,10 +654,19 @@ impl Platform for WinPlatform<'_> {
     }
 }
 
+/// What a hotkey asks the worker to do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Job {
+    /// Fix the layout of the selection / last word.
+    Convert,
+    /// Run the Macro Studio slot.
+    Macro,
+}
+
 /// Handle of the operation worker thread.
 #[derive(Debug)]
 pub struct Worker {
-    tx: mpsc::Sender<()>,
+    tx: mpsc::Sender<Job>,
     gate: Arc<Gate>,
     hold: ClipboardHold,
 }
@@ -622,7 +675,13 @@ impl Worker {
     /// Requests one operation (called from the hotkey thread). Presses that arrive while an
     /// operation is running are dropped.
     pub fn trigger(&self) {
-        let _ = self.tx.send(());
+        let _ = self.tx.send(Job::Convert);
+    }
+
+    /// Requests one run of the macro slot (called from the macro hotkey thread). Dropped
+    /// like [`Worker::trigger`] while an operation is running.
+    pub fn trigger_macro(&self) {
+        let _ = self.tx.send(Job::Macro);
     }
 
     /// Invalidates a running operation (pause, quit).
@@ -643,13 +702,17 @@ impl Worker {
 
 /// Starts the worker thread (MTA, one UI Automation client). For every trigger it asks
 /// `config` for the current policy (`None` = paused: do nothing), runs the pipeline and hands
-/// the outcome code to `on_outcome`. `None` if the thread could not be started.
+/// the outcome code to `on_outcome`. A macro trigger additionally asks `macro_slot` for the
+/// slot (`None` = no enabled slot: do nothing) and hands code macros to `runner`. `None` if
+/// the thread could not be started.
 pub fn spawn_worker(
     converter: ks_core::Converter,
     config: impl Fn() -> Option<Config> + Send + 'static,
+    macro_slot: impl Fn() -> Option<Macro> + Send + 'static,
+    mut runner: impl MacroRunner + Send + 'static,
     on_outcome: impl Fn(Outcome) + Send + 'static,
 ) -> Option<Worker> {
-    let (tx, rx) = mpsc::channel::<()>();
+    let (tx, rx) = mpsc::channel::<Job>();
     let gate = Arc::new(Gate::new());
     let thread_gate = Arc::clone(&gate);
     let hold = ClipboardHold::new();
@@ -660,15 +723,22 @@ pub fn spawn_worker(
             let com = ComGuard::mta();
             let uia = com.as_ref().ok().and_then(|_| Uia::new().ok());
             loop {
-                match rx.recv_timeout(HOLD_POLL) {
-                    Ok(()) => {}
+                let job = match rx.recv_timeout(HOLD_POLL) {
+                    Ok(job) => job,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // A held clipboard snapshot lives at most `w2::HOLD_MAX`.
                         thread_hold.expire();
                         continue;
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                }
+                };
+                let slot = match job {
+                    Job::Convert => None,
+                    Job::Macro => match macro_slot() {
+                        Some(slot) => Some(slot),
+                        None => continue,
+                    },
+                };
                 if let Some(cfg) = config() {
                     let outcome = match &uia {
                         Some(uia) => {
@@ -678,12 +748,18 @@ pub fn spawn_worker(
                                 profiles::DEFAULTS,
                                 thread_hold.clone(),
                             );
-                            ks_engine::run(&mut platform, &converter, &cfg)
+                            match &slot {
+                                None => ks_engine::run(&mut platform, &converter, &cfg),
+                                Some(slot) => {
+                                    ks_engine::run_macro(&mut platform, slot, &mut runner, &cfg)
+                                }
+                            }
                         }
                         None => Outcome::Refused(Refusal::Unsupported),
                     };
                     on_outcome(outcome);
                 }
+                drop(slot);
                 // Presses during the operation are ignored, not queued.
                 while rx.try_recv().is_ok() {}
             }

@@ -2,7 +2,7 @@
 //! `ks-platform-win` (the only crate with `unsafe`); elsewhere every function is an inert
 //! stub so the crate still compiles (the macOS backend is a separate work stream).
 
-use ks_engine::{Config, Outcome};
+use ks_engine::{Config, Macro, Outcome};
 
 /// Why `RegisterHotKey` failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,14 +55,21 @@ mod imp {
 
     pub fn spawn_worker(
         config: impl Fn() -> Option<Config> + Send + 'static,
+        macro_slot: impl Fn() -> Option<Macro> + Send + 'static,
         on_outcome: impl Fn(Outcome) + Send + 'static,
     ) -> Option<Worker> {
         let converter = ks_core::builtin().ok()?;
-        adapter::spawn_worker(converter, config, on_outcome)
+        // Code macros: refused until the sandbox host is integrated (feat/sandbox-win).
+        let runner = ks_engine::NoCodeRunner;
+        adapter::spawn_worker(converter, config, macro_slot, runner, on_outcome)
     }
 
     pub fn trigger(worker: &Worker) {
         worker.trigger();
+    }
+
+    pub fn trigger_macro(worker: &Worker) {
+        worker.trigger_macro();
     }
 
     pub fn cancel(worker: &Worker) {
@@ -167,11 +174,13 @@ mod imp {
     pub fn on_activate(_instance: &Instance, _f: impl Fn() + Send + 'static) {}
     pub fn spawn_worker(
         _config: impl Fn() -> Option<Config> + Send + 'static,
+        _macro_slot: impl Fn() -> Option<Macro> + Send + 'static,
         _on_outcome: impl Fn(Outcome) + Send + 'static,
     ) -> Option<Worker> {
         None
     }
     pub fn trigger(_worker: &Worker) {}
+    pub fn trigger_macro(_worker: &Worker) {}
     pub fn cancel(_worker: &Worker) {}
     pub fn clipboard_held(_worker: &Worker) -> bool {
         false

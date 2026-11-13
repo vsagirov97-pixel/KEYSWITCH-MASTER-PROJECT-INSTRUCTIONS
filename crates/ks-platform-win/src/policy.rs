@@ -7,6 +7,8 @@
 pub const ES_PASSWORD: u32 = 0x0020;
 /// `ES_READONLY` (winuser.h).
 pub const ES_READONLY: u32 = 0x0800;
+/// `ES_MULTILINE` (winuser.h).
+pub const ES_MULTILINE: u32 = 0x0004;
 
 /// Why a character makes W3 refuse the whole text (nothing is sent).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
