@@ -119,6 +119,15 @@ pub fn contains_return(batches: &[Vec<INPUT>]) -> bool {
 
 /// Sends `text`; `before_batch` must return `true` for every batch to proceed.
 pub fn send_unicode(text: &str, mut before_batch: impl FnMut() -> bool) -> Result<Sent, SendError> {
+    send_unicode_with(text, |_| before_batch())
+}
+
+/// As [`send_unicode`]; `before_batch` also gets the number of UTF-16 units of `text`
+/// already sent (0 before the first batch), so it can confirm their delivery.
+pub fn send_unicode_with(
+    text: &str,
+    mut before_batch: impl FnMut(usize) -> bool,
+) -> Result<Sent, SendError> {
     let mut batches = build_batches(text).map_err(SendError::Refused)?;
     let result = send_batches(&batches, &mut before_batch);
     // The events carry the text (one UTF-16 unit each): overwrite them before freeing.
@@ -135,12 +144,13 @@ pub fn send_unicode(text: &str, mut before_batch: impl FnMut() -> bool) -> Resul
 
 fn send_batches(
     batches: &[Vec<INPUT>],
-    before_batch: &mut impl FnMut() -> bool,
+    before_batch: &mut impl FnMut(usize) -> bool,
 ) -> Result<u32, SendError> {
     let mut events = 0u32;
     let mut requested = 0u32;
     for (n, batch) in batches.iter().enumerate() {
-        if !before_batch() {
+        // Every unit is one key-down and one key-up event.
+        if !before_batch(requested as usize / 2) {
             return Err(SendError::TargetLost { batches_sent: n });
         }
         requested += batch.len() as u32;

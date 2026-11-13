@@ -30,8 +30,10 @@ use crate::{desktop, edit, layout, popup, process};
 pub const W3_MAX_UNITS: usize = 200;
 /// How long W3 waits for the user to release the hotkey's modifiers.
 pub const MODIFIER_WAIT: Duration = Duration::from_millis(1500);
-/// Pause between W3 batches, letting the target consume the previous batch.
+/// Fallback pause between W3 batches when the target's text cannot be read back.
 pub const BATCH_PAUSE: Duration = Duration::from_millis(20);
+/// How long W3 waits for the previous batch to show up in the target before going on.
+pub const BATCH_CONFIRM_MAX: Duration = Duration::from_millis(300);
 /// How often the idle worker checks whether a held clipboard snapshot has expired.
 const HOLD_POLL: Duration = Duration::from_secs(5);
 /// How long the post-check waits for the written text to appear.
@@ -155,10 +157,9 @@ impl<'a> WinPlatform<'a> {
             std::thread::sleep(Duration::from_millis(10));
         }
         let (gate, token) = (self.gate, self.token);
-        let mut first = true;
-        let sent = input::send_unicode(text.expose(), || {
-            if !std::mem::take(&mut first) {
-                std::thread::sleep(BATCH_PAUSE);
+        let sent = input::send_unicode_with(text.expose(), |units_sent| {
+            if units_sent > 0 {
+                self.confirm_delivery(fp.pid, text, units_sent);
             }
             gate::pre_batch(&fp, gate, token).is_ok()
         });
@@ -167,6 +168,39 @@ impl<'a> WinPlatform<'a> {
             Err(SendError::Refused(_)) => Err(Stop::Refused(Refusal::ForbiddenChars)),
             Err(SendError::TargetLost { .. }) => Err(Stop::Failed(Failure::TargetChanged)),
             Err(SendError::Blocked { .. }) => Err(Stop::Failed(Failure::Write)),
+        }
+    }
+
+    /// W3 per-batch delivery confirmation: waits (at most [`BATCH_CONFIRM_MAX`]) until the
+    /// first `units` units of `text` are right before the caret of the target. A target whose
+    /// text cannot be read gets the fixed [`BATCH_PAUSE`]. On a timeout the next batch still
+    /// goes through the fingerprint check; the final post-check decides the outcome.
+    fn confirm_delivery(&self, pid: u32, text: &UserText, units: usize) {
+        let mut buf: Vec<u16> = text.expose().encode_utf16().take(units).collect();
+        let prefix = UserText::new(String::from_utf16_lossy(&buf));
+        // The units are user text too: overwrite them before freeing.
+        buf.fill(0);
+        std::hint::black_box(&buf);
+        let n = units_i32(units);
+        let start = Instant::now();
+        loop {
+            let Some(element) = self.fresh_element(pid) else {
+                std::thread::sleep(BATCH_PAUSE);
+                return;
+            };
+            match text_of(self.uia.read_before_caret(&element, n)) {
+                Ok(Some(now)) if now.same_as(&prefix) => return,
+                Ok(Some(_)) => {}
+                // No TextPattern, password, no caret, read error: cannot confirm.
+                Ok(None) | Err(_) => {
+                    std::thread::sleep(BATCH_PAUSE);
+                    return;
+                }
+            }
+            if start.elapsed() > BATCH_CONFIRM_MAX {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
         }
     }
 
