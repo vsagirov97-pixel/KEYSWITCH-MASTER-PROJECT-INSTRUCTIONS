@@ -89,6 +89,20 @@ fn decimal_number_kept() {
     check("xbckj 3.14", lang::EN, lang::RU, "число 3.14");
 }
 
+#[test]
+fn technical_tokens_with_digits_are_kept() {
+    // QA-B1-01: identifiers, versions, hex literals are not words.
+    for tok in ["v1.2.3", "0xFF", "x86_64", "a1b2c3"] {
+        let c = conv().convert(tok, lang::EN, lang::RU).unwrap();
+        assert_eq!(c.text, tok);
+        assert_eq!(c.confidence, Confidence::Low);
+    }
+    // Plain words around numbers still convert, the technical token stays.
+    check("d 15", lang::EN, lang::RU, "в 15");
+    check("ghbdtn v1.2.3", lang::EN, lang::RU, "привет v1.2.3");
+    check("мукышщт 2ю0", lang::RU, lang::EN, "version 2.0");
+}
+
 // ---- RU -> EN ----
 
 #[test]

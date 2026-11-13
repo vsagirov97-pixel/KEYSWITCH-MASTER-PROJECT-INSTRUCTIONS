@@ -147,8 +147,15 @@ impl Converter {
                         out.kept_tokens += 1;
                         continue;
                     }
-                    any_letters = true;
                     let (best, best_cost) = best_candidate(tok, src, tgt, last);
+                    if looks_technical(tok, &best) {
+                        // Identifier, version or hex literal (`v1.2.3`, `0xFF`, `x86_64`):
+                        // never rewritten, and it does not count as convertible text.
+                        out.text.push_str(tok);
+                        out.kept_tokens += 1;
+                        continue;
+                    }
+                    any_letters = true;
                     margin_sum += token_cost(tok, src, last) - best_cost;
                     out.text.push_str(&best);
                     out.converted_tokens += 1;
@@ -184,7 +191,10 @@ impl Converter {
                     let src = &self.langs[s];
                     let (best, best_cost) = best_candidate(tok, src, tgt, last);
                     let margin = token_cost(tok, src, last) - best_cost;
-                    if margin > MIXED_MARGIN {
+                    if looks_technical(tok, &best) {
+                        out.text.push_str(tok);
+                        out.kept_tokens += 1;
+                    } else if margin > MIXED_MARGIN {
                         out.text.push_str(&best);
                         out.converted_tokens += 1;
                     } else {
@@ -256,6 +266,25 @@ fn make_piece(s: &str, space: bool) -> Piece<'_> {
             last: false,
         }
     }
+}
+
+/// `true` if a letter touches a digit somewhere in `s` (`v1`, `0x`, `x86`, `a1b2`).
+fn letter_digit_contact(s: &str) -> bool {
+    let mut prev: Option<char> = None;
+    s.chars().any(|c| {
+        let touch = prev.is_some_and(|p| {
+            (p.is_alphabetic() && c.is_numeric()) || (p.is_numeric() && c.is_alphabetic())
+        });
+        prev = Some(c);
+        touch
+    })
+}
+
+/// A token that looks like an identifier, a version or a hex literal both as typed and as
+/// converted: letters glued to digits on both sides of the conversion (QA-B1-01). A
+/// mistyped Russian `2ю0` is not technical: converted it is `2.0`, without letters.
+fn looks_technical(tok: &str, converted: &str) -> bool {
+    letter_digit_contact(tok) && letter_digit_contact(converted)
 }
 
 /// Options for each character of `tok` when re-typed from `src` to `tgt`.
