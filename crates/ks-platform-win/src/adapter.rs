@@ -70,7 +70,8 @@ struct Target {
 pub struct VerifyTrace {
     pub attempts: u32,
     /// Step of the last attempt: `ok`, `mismatch`, `target_changed`, `no_element`,
-    /// `no_single_selection`, `password`, `no_text_pattern`, `read_error`.
+    /// `no_single_selection`, `password`, `no_text_pattern`, `read_error`; W1: `edit_ok`,
+    /// `edit_mismatch`, `edit_unreadable` (then the UIA steps follow).
     pub last_step: &'static str,
     pub expected_units: usize,
     /// `\r\n` pairs in the expected text.
@@ -163,12 +164,44 @@ impl<'a> WinPlatform<'a> {
         self.settled
     }
 
+    /// W1 post-check in the `Edit` control's own units (`EM_GETSEL` + `WM_GETTEXT`, k03): the
+    /// UIA proxy of a classic `Edit` counts `\r\n` as one character, so its range before the
+    /// caret is shifted. Falls back to UIA if the control cannot be read this way.
+    fn verify_by_edit(&self, expected: &UserText) -> bool {
+        self.note(|v| {
+            v.expected_units = expected.utf16_len();
+            v.expected_crlf = expected.expose().matches("\r\n").count();
+        });
+        let start = Instant::now();
+        loop {
+            self.note(|v| v.attempts += 1);
+            let Ok(t) = self.checked() else {
+                self.note(|v| v.last_step = "target_changed");
+                return false;
+            };
+            match edit::text_before_caret_is(t.fp.focus, expected.expose()) {
+                Some(true) => {
+                    self.note(|v| v.last_step = "edit_ok");
+                    return true;
+                }
+                Some(false) => self.note(|v| v.last_step = "edit_mismatch"),
+                None => {
+                    self.note(|v| v.last_step = "edit_unreadable");
+                    return self.verify_by_uia(expected);
+                }
+            }
+            if start.elapsed() > VERIFY_WAIT {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(40));
+        }
+    }
+
     /// Post-check: `true` if the text right before the caret now equals `expected`, every
-    /// line break counted as one form (k03: a classic multi-line `Edit` reports a written
-    /// `\r\n` differently, and may count it as one character when moving by characters).
+    /// line break counted as one form.
     fn verify_by_uia(&self, expected: &UserText) -> bool {
         let breaks = expected.expose().matches("\r\n").count();
-        let requested = expected.utf16_len().saturating_add(breaks);
+        let requested = expected.utf16_len();
         let units = units_i32(requested);
         self.note(|v| {
             v.expected_units = expected.utf16_len();
@@ -527,7 +560,12 @@ impl Platform for WinPlatform<'_> {
 
     fn verify(&mut self, expected: &UserText) -> bool {
         let readable = self.target.as_ref().is_some_and(|t| !t.copy_read);
-        let verified = readable.then(|| self.verify_by_uia(expected));
+        let w1 = self.target.as_ref().is_some_and(|t| t.method == Method::W1);
+        let verified = if w1 {
+            Some(self.verify_by_edit(expected))
+        } else {
+            readable.then(|| self.verify_by_uia(expected))
+        };
         if self.clip.paste_pending() {
             let confirmed = self.target.as_ref().is_some_and(|t| t.signal_confirmed);
             // §4.1 p.4-5: restore only on the target's signal and a positive post-check.
