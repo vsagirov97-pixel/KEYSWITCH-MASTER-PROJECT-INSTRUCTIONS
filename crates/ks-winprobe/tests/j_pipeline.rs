@@ -329,3 +329,129 @@ fn j6_richedit_w3_converted() {
     }
     common::verdict(&r, &problems);
 }
+
+/// j7: the keyboard layout follows a verified conversion and stays put after a refusal.
+///
+/// The test loads en-US and ru-RU itself (as e1 does), starts from en-US in the fixture's
+/// thread, and unloads only the layouts it added.
+#[test]
+fn j7_layout_follows_verified_conversion_only() {
+    use std::time::Duration;
+    const PRIMARY_EN: u16 = 0x09;
+    const PRIMARY_RU: u16 = 0x19;
+
+    let id = "j7.pipeline.layout_switch";
+    let Some(env) = common::start(id) else { return };
+    let mut r = common::report(id, &env);
+    let c = common::child(&r, "edit");
+    let k = c.controls.single;
+    let thread = ks_winprobe::gate::window_thread(k);
+    let primary = || layout::thread_layout(thread).lang_id() & 0x3FF;
+    let wait_primary =
+        |want: u16| fixture::wait_until(Duration::from_secs(3), || primary() == want);
+
+    let loaded_before = layout::loaded_layouts();
+    let initial = layout::thread_layout(thread);
+    let en = layout::load("00000409");
+    let ru = layout::load("00000419");
+    r.field("load_0409", en.is_some())
+        .field("load_0419", ru.is_some())
+        .field("initial_layout", format!("{:04x}", initial.lang_id()));
+    // Puts the fixture back on its initial layout, then unloads what this test added.
+    let cleanup = |r: &mut Report| {
+        if layout::thread_layout(thread) != initial && layout::request_switch(k, initial) {
+            let back = fixture::wait_until(Duration::from_secs(3), || {
+                layout::thread_layout(thread) == initial
+            });
+            r.field("restored_initial_ms", common::ms(back));
+        }
+        for h in [en, ru].into_iter().flatten() {
+            if !loaded_before.contains(&h) {
+                r.field("unloaded_added_layout", layout::unload(h));
+            }
+        }
+    };
+    let (Some(en), Some(_)) = (en, ru) else {
+        cleanup(&mut r);
+        return common::finish(
+            &r,
+            Status::Skip,
+            "LoadKeyboardLayoutW failed for 0409 or 0419",
+        );
+    };
+    let to_en = || {
+        primary() == PRIMARY_EN
+            || (layout::request_switch(k, en) && wait_primary(PRIMARY_EN).is_some())
+    };
+
+    let mut problems = Vec::new();
+    let mut skip = None;
+    'run: {
+        // Part 1: a verified conversion EN -> RU switches the target's layout.
+        if let Err(why) = prepare(&c, k, WRONG_LAYOUT, (6, 6), &mut r, &env) {
+            skip = Some(why);
+            break 'run;
+        }
+        if !to_en() {
+            skip = Some("could not put the fixture on the en-US layout first");
+            break 'run;
+        }
+        let o = run_pipeline(&r, &Config::default());
+        record(&mut r, o);
+        let observed = wait_primary(PRIMARY_RU);
+        r.field("target_switched_ms", common::ms(observed));
+        match o {
+            Outcome::Converted {
+                verified: true,
+                layout_switched: true,
+            } => {}
+            Outcome::Converted { verified: true, .. } => {
+                problems.push("verified conversion did not report layout_switched");
+            }
+            _ => problems.push("outcome is not a verified CONVERTED"),
+        }
+        if fixture::get_text(k) != CONVERTED {
+            problems.push("field does not hold the converted word");
+        }
+        if observed.is_none() {
+            problems.push("target thread layout did not become ru after the conversion");
+        }
+
+        // Part 2: a refusal (excluded app) leaves text and layout alone.
+        if !to_en() {
+            problems.push("could not return the fixture to en-US for the refusal part");
+            break 'run;
+        }
+        if let Err(why) = prepare(&c, k, WRONG_LAYOUT, (6, 6), &mut r, &env) {
+            skip = Some(why);
+            break 'run;
+        }
+        let config = Config {
+            excluded: vec![FIXTURE_EXE_NAME.into()],
+            ..Config::default()
+        };
+        let refused = run_pipeline(&r, &config);
+        r.field("refusal_outcome", refused.code());
+        // A switch request is asynchronous: give a wrongly posted one time to land.
+        let moved = fixture::wait_until(Duration::from_millis(700), || primary() != PRIMARY_EN);
+        r.field("layout_changed_after_refusal", moved.is_some());
+        if refused != Outcome::Refused(Refusal::ExcludedApp) {
+            problems.push("refusal part: outcome is not EXCLUDED_APP");
+        }
+        if moved.is_some() {
+            problems.push("layout changed after a refusal");
+        }
+        if fixture::get_text(k) != WRONG_LAYOUT {
+            problems.push("refused operation changed the field");
+        }
+    }
+    cleanup(&mut r);
+    r.field(
+        "loaded_layout_count_restored",
+        layout::loaded_layouts().len() == loaded_before.len(),
+    );
+    match skip {
+        Some(why) if problems.is_empty() => common::finish(&r, Status::Skip, why),
+        _ => common::verdict(&r, &problems),
+    }
+}
