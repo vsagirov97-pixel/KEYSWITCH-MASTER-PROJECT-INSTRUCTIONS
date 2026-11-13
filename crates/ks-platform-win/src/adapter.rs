@@ -11,6 +11,7 @@
 //! through W2 (clipboard paste, [`w2`]) instead of W3, and a focused element without
 //! TextPattern is read through Ctrl+C — the selection only.
 
+use std::cell::Cell;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -63,6 +64,35 @@ struct Target {
     signal_confirmed: bool,
 }
 
+/// What the post-check saw on its last attempt. Lengths and flags only, never text.
+/// Collected only after [`WinPlatform::set_verify_trace`] (tests).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VerifyTrace {
+    pub attempts: u32,
+    /// Step of the last attempt: `ok`, `mismatch`, `target_changed`, `no_element`,
+    /// `no_single_selection`, `password`, `no_text_pattern`, `read_error`.
+    pub last_step: &'static str,
+    pub expected_units: usize,
+    /// `\r\n` pairs in the expected text.
+    pub expected_crlf: usize,
+    /// Units requested before the caret.
+    pub requested_units: usize,
+    /// Units UIA returned before the caret, and their line-break shape.
+    pub read_units: usize,
+    pub read_crlf: usize,
+    pub read_lone_cr: usize,
+    pub read_lone_lf: usize,
+    pub raw_equal: bool,
+    pub raw_ends_with: bool,
+    pub unified_ends_with: bool,
+    /// Char index of the expected text (line breaks unified) inside the read text, if any.
+    pub unified_match_at: Option<usize>,
+    pub unified_read_chars: usize,
+    pub unified_expected_chars: usize,
+    /// Caret facts of the fresh element on the last attempt (`None` if not available).
+    pub caret: Option<uia::CaretFacts>,
+}
+
 /// Windows implementation of the engine's system access for one operation.
 pub struct WinPlatform<'a> {
     uia: &'a Uia,
@@ -73,6 +103,7 @@ pub struct WinPlatform<'a> {
     clip: w2::Session,
     settled: Settled,
     popup_timeout: Duration,
+    trace: Option<Cell<VerifyTrace>>,
 }
 
 impl<'a> WinPlatform<'a> {
@@ -99,12 +130,32 @@ impl<'a> WinPlatform<'a> {
             clip: w2::Session::new(hold),
             settled: Settled::Nothing,
             popup_timeout: popup::TIMEOUT,
+            trace: None,
         }
     }
 
     /// Overrides how long the language-choice popup waits (default [`popup::TIMEOUT`]).
     pub fn set_popup_timeout(&mut self, timeout: Duration) {
         self.popup_timeout = timeout;
+    }
+
+    /// Tests: records what the post-check sees ([`WinPlatform::verify_trace`]). Reads lengths
+    /// around the caret from the document start; never enabled by the product.
+    pub fn set_verify_trace(&mut self, on: bool) {
+        self.trace = on.then(|| Cell::new(VerifyTrace::default()));
+    }
+
+    /// The post-check trace, if enabled.
+    pub fn verify_trace(&self) -> Option<VerifyTrace> {
+        self.trace.as_ref().map(Cell::get)
+    }
+
+    fn note(&self, f: impl FnOnce(&mut VerifyTrace)) {
+        if let Some(c) = &self.trace {
+            let mut t = c.get();
+            f(&mut t);
+            c.set(t);
+        }
     }
 
     /// What the last W2 paste of this operation did with the user's clipboard.
@@ -117,19 +168,17 @@ impl<'a> WinPlatform<'a> {
     /// `\r\n` differently, and may count it as one character when moving by characters).
     fn verify_by_uia(&self, expected: &UserText) -> bool {
         let breaks = expected.expose().matches("\r\n").count();
-        let units = units_i32(expected.utf16_len().saturating_add(breaks));
+        let requested = expected.utf16_len().saturating_add(breaks);
+        let units = units_i32(requested);
+        self.note(|v| {
+            v.expected_units = expected.utf16_len();
+            v.expected_crlf = breaks;
+            v.requested_units = requested;
+        });
         let start = Instant::now();
         loop {
-            let Ok(t) = self.checked() else {
-                return false;
-            };
-            // A fresh element for every attempt: the element captured in `begin` may be
-            // served by a client-side proxy (classic `Edit`) that keeps the text it saw
-            // before the write.
-            if let Some(element) = self.fresh_element(t.fp.pid)
-                && let Ok(Some(now)) = text_of(self.uia.read_before_caret(&element, units))
-                && now.ends_with_ignoring_line_breaks(expected)
-            {
+            self.note(|v| v.attempts += 1);
+            if self.verify_once(expected, units) {
                 return true;
             }
             if start.elapsed() > VERIFY_WAIT {
@@ -137,6 +186,72 @@ impl<'a> WinPlatform<'a> {
             }
             std::thread::sleep(Duration::from_millis(40));
         }
+    }
+
+    /// One post-check attempt; records its step in the trace (if enabled).
+    fn verify_once(&self, expected: &UserText, units: i32) -> bool {
+        let Ok(t) = self.checked() else {
+            self.note(|v| v.last_step = "target_changed");
+            return false;
+        };
+        // A fresh element for every attempt: the element captured in `begin` may be served
+        // by a client-side proxy (classic `Edit`) that keeps the text it saw before the
+        // write.
+        let Some(element) = self.fresh_element(t.fp.pid) else {
+            self.note(|v| v.last_step = "no_element");
+            return false;
+        };
+        if self.trace.is_some() {
+            let caret = uia::caret_facts(&element, 4096).ok();
+            self.note(|v| v.caret = caret);
+        }
+        let now = match text_of(self.uia.read_before_caret(&element, units)) {
+            Ok(Some(now)) => now,
+            Ok(None) => {
+                self.note(|v| v.last_step = "no_single_selection");
+                return false;
+            }
+            Err(Stop::Refused(Refusal::Password)) => {
+                self.note(|v| v.last_step = "password");
+                return false;
+            }
+            Err(Stop::Refused(_)) => {
+                self.note(|v| v.last_step = "no_text_pattern");
+                return false;
+            }
+            Err(_) => {
+                self.note(|v| v.last_step = "read_error");
+                return false;
+            }
+        };
+        let ok = now.ends_with_ignoring_line_breaks(expected);
+        if self.trace.is_some() {
+            self.note_comparison(&now, expected, ok);
+        }
+        ok
+    }
+
+    /// Trace only (tests): lengths and line-break shape of what the post-check compared.
+    /// The intermediate copies of `replace` are not wiped; the product never enables this.
+    fn note_comparison(&self, now: &UserText, expected: &UserText, ok: bool) {
+        let (crlf, cr, lf) = uia::line_breaks(now.expose());
+        let unify = |s: &str| UserText::new(s.replace("\r\n", "\n").replace('\r', "\n"));
+        let (a, b) = (unify(now.expose()), unify(expected.expose()));
+        let at = a
+            .expose()
+            .find(b.expose())
+            .map(|byte| a.expose()[..byte].chars().count());
+        self.note(|v| {
+            v.read_units = now.utf16_len();
+            (v.read_crlf, v.read_lone_cr, v.read_lone_lf) = (crlf, cr, lf);
+            v.raw_equal = now.same_as(expected);
+            v.raw_ends_with = now.expose().ends_with(expected.expose());
+            v.unified_ends_with = ok;
+            v.unified_match_at = at;
+            v.unified_read_chars = a.expose().chars().count();
+            v.unified_expected_chars = b.expose().chars().count();
+            v.last_step = if ok { "ok" } else { "mismatch" };
+        });
     }
 
     /// W3: `SendInput` Unicode with the fingerprint re-checked before every batch.

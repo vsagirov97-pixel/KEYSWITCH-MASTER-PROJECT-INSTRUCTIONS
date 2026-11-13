@@ -220,6 +220,70 @@ impl Uia {
     }
 }
 
+/// Lengths around the caret of a text element, for diagnostics only (no text kept).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CaretFacts {
+    /// Number of selection ranges.
+    pub selections: usize,
+    /// UTF-16 units of the (first) selection; 0 = caret only.
+    pub selection_units: usize,
+    /// UTF-16 units from the document start to the selection start (as UIA reports it).
+    pub units_before_caret: usize,
+    /// UTF-16 units of the whole document (capped at `max`).
+    pub document_units: usize,
+    /// `\r\n` pairs and lone `\r` / `\n` in the document as UIA returns it.
+    pub document_crlf: usize,
+    pub document_lone_cr: usize,
+    pub document_lone_lf: usize,
+}
+
+/// Line-break shape of `s`: (`\r\n` pairs, lone `\r`, lone `\n`).
+pub fn line_breaks(s: &str) -> (usize, usize, usize) {
+    let crlf = s.matches("\r\n").count();
+    let cr = s.matches('\r').count() - crlf;
+    let lf = s.matches('\n').count() - crlf;
+    (crlf, cr, lf)
+}
+
+/// Diagnostics of the caret position of `el`, reading at most `max` units. Test use only:
+/// it reads the document from its start (the text itself is dropped right away).
+pub fn caret_facts(el: &IUIAutomationElement, max: i32) -> Result<CaretFacts, String> {
+    if password_guard(el).is_some() {
+        return Err("password".into());
+    }
+    let tp = text_pattern(el).ok_or("no TextPattern")?;
+    let sel = selection(&tp)?;
+    let mut facts = CaretFacts {
+        selections: sel.len(),
+        ..CaretFacts::default()
+    };
+    // SAFETY: method calls on live interfaces; ranges are fresh clones we own.
+    let doc = unsafe { tp.DocumentRange() }.map_err(|e| format!("DocumentRange: {e}"))?;
+    let all = ks_engine::UserText::new(range_text(&doc, max)?);
+    facts.document_units = all.utf16_len();
+    (
+        facts.document_crlf,
+        facts.document_lone_cr,
+        facts.document_lone_lf,
+    ) = line_breaks(all.expose());
+    if let Some(first) = sel.first() {
+        facts.selection_units = ks_engine::UserText::new(range_text(first, max)?).utf16_len();
+        // SAFETY: as above.
+        let head = unsafe {
+            let r = doc.Clone().map_err(|e| format!("Clone: {e}"))?;
+            r.MoveEndpointByRange(
+                TextPatternRangeEndpoint_End,
+                first,
+                TextPatternRangeEndpoint_Start,
+            )
+            .map_err(|e| format!("MoveEndpointByRange: {e}"))?;
+            r
+        };
+        facts.units_before_caret = ks_engine::UserText::new(range_text(&head, max)?).utf16_len();
+    }
+    Ok(facts)
+}
+
 /// Range of at most `units` characters that ends at the start of `sel`.
 pub fn before_caret_range(
     sel: &IUIAutomationTextRange,

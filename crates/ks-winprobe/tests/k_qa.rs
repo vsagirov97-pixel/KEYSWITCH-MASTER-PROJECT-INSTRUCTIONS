@@ -23,7 +23,7 @@ use std::cell::Cell;
 use std::time::Duration;
 
 use ks_engine::{Config, Failure, Outcome, Platform, Refusal, Stop, TargetInfo, UserText};
-use ks_platform_win::adapter::WinPlatform;
+use ks_platform_win::adapter::{VerifyTrace, WinPlatform};
 use ks_winprobe::child::ChildFixture;
 use ks_winprobe::fixture::{self, Hwnd};
 use ks_winprobe::gate::Gate;
@@ -122,6 +122,67 @@ fn run_hooked<'h>(
 
 fn run_pipeline(r: &Report, config: &Config) -> Outcome {
     run_hooked(r, config, At::Never, None)
+}
+
+/// As [`run_pipeline`], with the post-check trace of the product platform (k03).
+fn run_traced(r: &Report, config: &Config) -> (Outcome, Option<VerifyTrace>) {
+    let com = ComGuard::mta().unwrap_or_else(|e| {
+        common::finish(r, Status::Fail, &e);
+        unreachable!()
+    });
+    let uia = Uia::new().unwrap_or_else(|e| {
+        common::finish(r, Status::Fail, &e);
+        unreachable!()
+    });
+    let converter = ks_core::builtin().expect("built-in layouts parse");
+    let gate = Gate::new();
+    let result = {
+        let mut platform = WinPlatform::new(&uia, &gate);
+        platform.set_verify_trace(true);
+        let o = ks_engine::run(&mut platform, &converter, config);
+        (o, platform.verify_trace())
+    };
+    drop(uia);
+    drop(com);
+    result
+}
+
+/// Adds the post-check trace (lengths and flags only) to the report.
+fn trace_fields(r: &mut Report, t: Option<VerifyTrace>) {
+    let Some(t) = t else {
+        r.field("vt_present", false);
+        return;
+    };
+    let opt = |v: Option<usize>| v.map_or("none".to_owned(), |v| v.to_string());
+    r.field("vt_attempts", t.attempts)
+        .field("vt_last_step", t.last_step)
+        .field("vt_expected_units", t.expected_units)
+        .field("vt_expected_crlf", t.expected_crlf)
+        .field("vt_requested_units", t.requested_units)
+        .field("vt_read_units", t.read_units)
+        .field("vt_read_crlf", t.read_crlf)
+        .field("vt_read_lone_cr", t.read_lone_cr)
+        .field("vt_read_lone_lf", t.read_lone_lf)
+        .field("vt_raw_equal", t.raw_equal)
+        .field("vt_raw_ends_with", t.raw_ends_with)
+        .field("vt_unified_ends_with", t.unified_ends_with)
+        .field("vt_unified_match_at", opt(t.unified_match_at))
+        .field("vt_unified_read_chars", t.unified_read_chars)
+        .field("vt_unified_expected_chars", t.unified_expected_chars);
+    match t.caret {
+        Some(c) => {
+            r.field("vt_caret_selections", c.selections)
+                .field("vt_caret_selection_units", c.selection_units)
+                .field("vt_caret_units_before", c.units_before_caret)
+                .field("vt_doc_units", c.document_units)
+                .field("vt_doc_crlf", c.document_crlf)
+                .field("vt_doc_lone_cr", c.document_lone_cr)
+                .field("vt_doc_lone_lf", c.document_lone_lf);
+        }
+        None => {
+            r.field("vt_caret", "none");
+        }
+    }
 }
 
 /// Fills `control`, focuses it in the foreground child, then puts the selection.
@@ -250,9 +311,15 @@ fn k03_multiline_selection_keeps_line_break() {
     if let Err(why) = prepare(&c, k, text, (4, 15), &mut r, &env) {
         return common::finish(&r, Status::Skip, why);
     }
-    let o = run_pipeline(&r, &Config::default());
+    let (o, trace) = run_traced(&r, &Config::default());
     let after = fixture::get_text(k);
     let converted = after == "abc привет\r\nмир xyz";
+    // Evidence for CONVERTED_UNVERIFIED: what the post-check compared, and where the
+    // fixture's own caret is (EM_GETSEL, Edit units: CRLF = 2).
+    trace_fields(&mut r, trace);
+    let (sel_a, sel_b) = fixture::get_sel(k);
+    r.field("edit_sel_start_after", sel_a)
+        .field("edit_sel_end_after", sel_b);
     let unchanged = after == text;
     r.field("outcome", o.code())
         .field("verified", is_verified(o))
