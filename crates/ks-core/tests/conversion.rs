@@ -103,6 +103,22 @@ fn technical_tokens_with_digits_are_kept() {
     check("мукышщт 2ю0", lang::RU, lang::EN, "version 2.0");
 }
 
+#[test]
+fn word_final_key_prefers_the_letter_of_a_dictionary_word() {
+    // QA-B1-03: `;` / `.` / `,` at a word end that complete a word are its letter.
+    check("'nf;", lang::EN, lang::RU, "этаж");
+    check("'nf; 3, jabc 12", lang::EN, lang::RU, "этаж 3, офис 12");
+    check("hf,jnf.", lang::EN, lang::RU, "работаю");
+    // A sentence end after a complete word keeps its punctuation.
+    check(
+        "Cgfcb,j pf gjvjom.",
+        lang::EN,
+        lang::RU,
+        "Спасибо за помощь.",
+    );
+    check("ytn.", lang::EN, lang::RU, "нет.");
+}
+
 // ---- RU -> EN ----
 
 #[test]

@@ -15,6 +15,10 @@ const MAX_ENUMERATED_TOKEN: usize = 48;
 /// Mixed text: a token is converted only if conversion is better by more than this margin
 /// (nats), kept if worse by more than it, otherwise the result is ambiguous.
 const MIXED_MARGIN: f32 = 2.0;
+/// Extra cost of keeping word-final punctuation when its key's letter would complete a
+/// dictionary word (`'nf;` -> `этаж`, not `эта;`; QA-B1-03). Small enough that a much more
+/// frequent word before the punctuation still keeps it.
+const LETTER_WORD_PENALTY: f32 = 1.5;
 
 /// A language: its keyboard layout and its language model.
 #[derive(Debug, Clone)]
@@ -138,7 +142,9 @@ impl Converter {
         };
         let mut margin_sum = 0.0;
         let mut any_letters = false;
-        for piece in split_tokens(text) {
+        let pieces = split_tokens(text);
+        let sentence = is_sentence(&pieces);
+        for piece in pieces {
             match piece {
                 Piece::Space(s) => out.text.push_str(s),
                 Piece::Token { text: tok, last } => {
@@ -147,7 +153,7 @@ impl Converter {
                         out.kept_tokens += 1;
                         continue;
                     }
-                    let (best, best_cost) = best_candidate(tok, src, tgt, last);
+                    let (best, best_cost) = best_candidate(tok, src, tgt, last, last && sentence);
                     if looks_technical(tok, &best) {
                         // Identifier, version or hex literal (`v1.2.3`, `0xFF`, `x86_64`):
                         // never rewritten, and it does not count as convertible text.
@@ -179,7 +185,9 @@ impl Converter {
             converted_tokens: 0,
             kept_tokens: 0,
         };
-        for piece in split_tokens(text) {
+        let pieces = split_tokens(text);
+        let sentence = is_sentence(&pieces);
+        for piece in pieces {
             match piece {
                 Piece::Space(s) => out.text.push_str(s),
                 Piece::Token { text: tok, last } => {
@@ -189,7 +197,7 @@ impl Converter {
                         continue;
                     };
                     let src = &self.langs[s];
-                    let (best, best_cost) = best_candidate(tok, src, tgt, last);
+                    let (best, best_cost) = best_candidate(tok, src, tgt, last, last && sentence);
                     let margin = token_cost(tok, src, last) - best_cost;
                     if looks_technical(tok, &best) {
                         out.text.push_str(tok);
@@ -302,11 +310,28 @@ fn options(tok: &str, src: &Language, tgt: &Language) -> Vec<Vec<char>> {
         .collect()
 }
 
-fn best_candidate(tok: &str, src: &Language, tgt: &Language, last: bool) -> (String, f32) {
+/// `true` if the text has several tokens: its final punctuation then ends a sentence.
+fn is_sentence(pieces: &[Piece<'_>]) -> bool {
+    pieces
+        .iter()
+        .filter(|p| matches!(p, Piece::Token { .. }))
+        .nth(1)
+        .is_some()
+}
+
+/// Cheapest re-typing of `tok`. `sentence_end`: the token ends a text of several words, so
+/// its final punctuation is a sentence end and is not pushed towards a letter.
+fn best_candidate(
+    tok: &str,
+    src: &Language,
+    tgt: &Language,
+    last: bool,
+    sentence_end: bool,
+) -> (String, f32) {
     let opts = options(tok, src, tgt);
     if opts.len() > MAX_ENUMERATED_TOKEN {
         let chars: Vec<char> = opts.iter().map(|o| o[0]).collect();
-        let cost = score(&chars, tgt, last);
+        let cost = score(&chars, tgt, last, &[]);
         return (chars.into_iter().collect(), cost);
     }
     let ambiguous: Vec<usize> = opts
@@ -317,12 +342,26 @@ fn best_candidate(tok: &str, src: &Language, tgt: &Language, last: bool) -> (Str
         .take(MAX_AMBIGUOUS)
         .collect();
     let mut buf: Vec<char> = opts.iter().map(|o| o[0]).collect();
+    // For each position: the letter its key gives, if the other option is punctuation.
+    let mut letters: Vec<Option<char>> = opts
+        .iter()
+        .map(|o| {
+            o.iter()
+                .copied()
+                .find(|c| c.is_alphabetic())
+                .filter(|_| o.len() > 1)
+        })
+        .collect();
+    if sentence_end && let Some(l) = letters.last_mut() {
+        // `Cgfcb,j pf gjvjom.` -> `Спасибо за помощь.`, not `помощью`.
+        *l = None;
+    }
     let mut best: Option<(Vec<char>, f32)> = None;
     for mask in 0u32..(1u32 << ambiguous.len()) {
         for (bit, &pos) in ambiguous.iter().enumerate() {
             buf[pos] = opts[pos][((mask >> bit) & 1) as usize];
         }
-        let cost = score(&buf, tgt, last);
+        let cost = score(&buf, tgt, last, &letters);
         if best.as_ref().is_none_or(|(_, bc)| cost < *bc) {
             best = Some((buf.clone(), cost));
         }
@@ -333,11 +372,12 @@ fn best_candidate(tok: &str, src: &Language, tgt: &Language, last: bool) -> (Str
 
 fn token_cost(tok: &str, lang: &Language, last: bool) -> f32 {
     let chars: Vec<char> = tok.chars().collect();
-    score(&chars, lang, last)
+    score(&chars, lang, last, &[])
 }
 
-/// Cost of a token under `lang`: word costs plus punctuation priors.
-fn score(chars: &[char], lang: &Language, last: bool) -> f32 {
+/// Cost of a token under `lang`: word costs plus punctuation priors. `letters[i]`, when
+/// given, is the letter the key at position `i` produces in `lang` (ambiguous punctuation).
+fn score(chars: &[char], lang: &Language, last: bool, letters: &[Option<char>]) -> f32 {
     let mut cost = 0.0;
     let mut word = String::new();
     let flush = |word: &mut String, cost: &mut f32| {
@@ -355,6 +395,17 @@ fn score(chars: &[char], lang: &Language, last: bool) -> f32 {
         if c.is_alphabetic() {
             word.extend(c.to_lowercase());
             continue;
+        }
+        // Word-final punctuation whose key would have completed a dictionary word.
+        let completes_word = !word.is_empty()
+            && !letter_after(i)
+            && letters.get(i).copied().flatten().is_some_and(|l| {
+                let mut w = word.clone();
+                w.extend(l.to_lowercase());
+                lang.model.knows(&w)
+            });
+        if completes_word {
+            cost += LETTER_WORD_PENALTY;
         }
         flush(&mut word, &mut cost);
         if c.is_numeric() {
