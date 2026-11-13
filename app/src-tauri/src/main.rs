@@ -224,7 +224,7 @@ fn add_excluded_app(shared: Ctx<'_>, exe: String) -> Result<Vec<ExcludedApp>, St
 
 #[tauri::command]
 fn remove_excluded_app(shared: Ctx<'_>, exe: String) -> Result<Vec<ExcludedApp>, String> {
-    lock(&shared.stored).excluded_user.retain(|e| *e != exe);
+    lock(&shared.stored).remove_user_excluded(&exe);
     shared.save()?;
     Ok(excluded_list(&lock(&shared.stored)))
 }

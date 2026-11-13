@@ -80,6 +80,17 @@ impl Stored {
         self
     }
 
+    /// Removes a user entry. The name is normalised as when it was added, so the case and
+    /// surrounding spaces do not matter (QA-B1-05). `false` if there was no such entry.
+    pub fn remove_user_excluded(&mut self, exe: &str) -> bool {
+        let Some(name) = ks_engine::normalize_exe(exe) else {
+            return false;
+        };
+        let before = self.excluded_user.len();
+        self.excluded_user.retain(|e| *e != name);
+        self.excluded_user.len() != before
+    }
+
     /// Default entries followed by the user's.
     pub fn excluded_all(&self) -> Vec<String> {
         DEFAULT_EXCLUDED
@@ -139,6 +150,18 @@ mod tests {
         std::fs::write(&path, b"{ not json").expect("write");
         assert_eq!(load(Some(&path)), Stored::default());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn removal_normalises_the_name() {
+        let mut s = Stored {
+            excluded_user: vec!["keepass2.exe".into(), "my app.exe".into()],
+            ..Stored::default()
+        };
+        assert!(s.remove_user_excluded("  KeePass2.EXE "));
+        assert!(s.remove_user_excluded("My App.exe"));
+        assert!(s.excluded_user.is_empty());
+        assert!(!s.remove_user_excluded("bad/name.exe"));
     }
 
     #[test]

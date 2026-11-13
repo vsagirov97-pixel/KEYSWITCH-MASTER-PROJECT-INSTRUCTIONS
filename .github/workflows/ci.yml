@@ -131,10 +131,23 @@ jobs:
         shell: bash
         run: grep '"test":"i' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
       # Scenario j = Beta 1 product pipeline (ks-engine over ks-platform-win) on the fixture.
-      - name: Publish KS-PROBE lines (j-z)
+      - name: Publish KS-PROBE lines (j)
         if: always()
         shell: bash
-        run: grep '"test":"[j-z]' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+        run: grep '"test":"j' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+      # Scenario k = QA edge cases (k01..k12): two steps, GitHub keeps <= 10 notices per step.
+      - name: Publish KS-PROBE lines (k01-k09)
+        if: always()
+        shell: bash
+        run: grep '"test":"k0' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+      - name: Publish KS-PROBE lines (k10-k19)
+        if: always()
+        shell: bash
+        run: grep '"test":"k1' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
+      - name: Publish KS-PROBE lines (l-z)
+        if: always()
+        shell: bash
+        run: grep '"test":"[l-z]' probe-lines.txt | sed 's/%/%25/g; s/^/::notice title=KS-PROBE::/' || true
 
   supply-chain:
     name: Supply chain

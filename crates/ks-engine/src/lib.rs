@@ -141,7 +141,9 @@ impl Outcome {
 /// Facts about the captured target that policy needs. No text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TargetInfo {
-    /// Lower-cased executable file name (`notepad.exe`); empty if unknown.
+    /// Lower-cased executable file name (`notepad.exe`); empty if unknown. With an unknown
+    /// name the excluded list cannot be honoured: the engine refuses (`UNSUPPORTED`) unless
+    /// the list is empty.
     pub exe: String,
 }
 
@@ -301,7 +303,12 @@ fn run_inner<P: Platform>(
     config: &Config,
 ) -> Result<Outcome, Stop> {
     let target = platform.begin()?;
-    if !target.exe.is_empty() && config.excluded.contains(&target.exe) {
+    if target.exe.is_empty() {
+        // QA-B1-06: fail closed even if a platform does not refuse unknown executables.
+        if !config.excluded.is_empty() {
+            return Err(Stop::Refused(Refusal::Unsupported));
+        }
+    } else if config.excluded.contains(&target.exe) {
         return Err(Stop::Refused(Refusal::ExcludedApp));
     }
 
@@ -629,6 +636,25 @@ mod tests {
             Outcome::Refused(Refusal::ExcludedApp)
         );
         assert_eq!(f.content(), "ghbdtn");
+    }
+
+    #[test]
+    fn unknown_executable_is_refused_when_exclusions_exist() {
+        let mut f = Fake::caret_at_end("ghbdtn");
+        f.exe = "";
+        let cfg = Config {
+            excluded: vec!["keepass.exe".into()],
+            ..Config::default()
+        };
+        assert_eq!(
+            run(&mut f, &ks_core::builtin().expect("built-in data"), &cfg),
+            Outcome::Refused(Refusal::Unsupported)
+        );
+        assert_eq!(f.writes, 0);
+        // Without any exclusion there is nothing to honour.
+        let mut f = Fake::caret_at_end("ghbdtn");
+        f.exe = "";
+        assert!(matches!(go(&mut f), Outcome::Converted { .. }));
     }
 
     #[test]
