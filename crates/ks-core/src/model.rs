@@ -17,6 +17,8 @@ pub struct LanguageModel {
     alphabet: HashSet<char>,
     tri: HashMap<(char, char, char), f32>,
     bi: HashMap<(char, char), f32>,
+    /// Upper-case abbreviations of this language (`PDF`, `ЖКХ`; QA-WF-01/02).
+    abbreviations: HashSet<String>,
 }
 
 impl LanguageModel {
@@ -65,7 +67,30 @@ impl LanguageModel {
             alphabet,
             tri,
             bi,
+            abbreviations: HashSet::new(),
         }
+    }
+
+    /// Adds the abbreviations of `src`: one per line, `#` starts a comment line. They are
+    /// stored upper-case; a word that is not all letters of this language is ignored.
+    #[must_use]
+    pub fn with_abbreviations(mut self, src: &str) -> Self {
+        for line in src.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let upper = line.to_uppercase();
+            if upper.chars().all(|c| self.is_letter(c)) {
+                self.abbreviations.insert(upper);
+            }
+        }
+        self
+    }
+
+    /// True if `word` (compared upper-case) is a listed abbreviation of this language.
+    pub fn knows_abbreviation(&self, word: &str) -> bool {
+        self.abbreviations.contains(&word.to_uppercase())
     }
 
     /// True if `ch` (any case) is a letter of this language.
@@ -109,5 +134,15 @@ mod tests {
         assert!(m.word_cost("hellp") < m.word_cost("xqzv"));
         assert!(m.is_letter('H'));
         assert!(!m.is_letter('я'));
+    }
+
+    #[test]
+    fn abbreviations_are_upper_case_letters_of_the_language() {
+        let m = LanguageModel::from_frequency_list("pdf 1\nhttp 1\n")
+            .with_abbreviations("# c\npdf\nHTTP\nЖКХ\n");
+        assert!(m.knows_abbreviation("PDF"));
+        assert!(m.knows_abbreviation("http"));
+        assert!(!m.knows_abbreviation("ЖКХ"), "not letters of this language");
+        assert!(!m.knows_abbreviation("PD"));
     }
 }

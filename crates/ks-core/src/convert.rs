@@ -177,6 +177,7 @@ impl Converter {
         let mut margin_sum = 0.0;
         let mut any_letters = false;
         let (mut kept_own, mut all_confident) = (false, true);
+        let mut kept_abbreviation = false;
         let pieces = split_tokens(text);
         let sentence = is_sentence(&pieces);
         // Number tokens whose separators the target layout reads differently (`3/14`):
@@ -193,6 +194,23 @@ impl Converter {
                         out.text.push_str(tok);
                         out.kept_tokens += 1;
                         continue;
+                    }
+                    match caps_rule(tok, src, tgt) {
+                        Some(CapsRule::Keep) => {
+                            // A correct all-caps abbreviation (`PDF`, `ЖКХ`; QA-WF-02).
+                            out.text.push_str(tok);
+                            out.kept_tokens += 1;
+                            kept_abbreviation = true;
+                            continue;
+                        }
+                        Some(CapsRule::Abbreviation(a)) => {
+                            // `ЗВА` -> `PDF`: a listed abbreviation of the target.
+                            out.text.push_str(&a);
+                            out.converted_tokens += 1;
+                            any_letters = true;
+                            continue;
+                        }
+                        Some(CapsRule::Word) | None => {}
                     }
                     let (best, best_cost) = best_candidate(tok, src, tgt, last, last && sentence);
                     if looks_technical(tok, &best) {
@@ -224,7 +242,11 @@ impl Converter {
         }
         // Keeping some words is a per-token decision: every converted word must then be
         // confidently in the wrong layout on its own (`npm install` stays).
-        if !any_letters || margin_sum < 0.0 || (kept_own && !all_confident) {
+        // Only correct abbreviations (and letterless tokens): the text is right as it is,
+        // `High` with the text unchanged (nothing to do, no language question).
+        let only_abbreviations = !any_letters && kept_abbreviation;
+        if (!any_letters && !only_abbreviations) || margin_sum < 0.0 || (kept_own && !all_confident)
+        {
             out.confidence = Confidence::Low;
         }
         if out.converted_tokens > 0 {
@@ -256,8 +278,14 @@ impl Converter {
         let tgt = &self.langs[t];
         if mode == ConvertMode::Literal {
             return Ok(literal(text, |tok| {
-                self.dominant_foreign(tok, t)
-                    .map(|s| literal_token(tok, &self.langs[s], tgt))
+                let s = self.dominant_foreign(tok, t)?;
+                let src = &self.langs[s];
+                match caps_rule(tok, src, tgt) {
+                    // Mixed text is decided per token: a correct abbreviation stays.
+                    Some(CapsRule::Keep) => None,
+                    Some(CapsRule::Abbreviation(a)) => Some(a),
+                    Some(CapsRule::Word) | None => Some(literal_token(tok, src, tgt)),
+                }
             }));
         }
         let mut out = Conversion {
@@ -278,6 +306,19 @@ impl Converter {
                         continue;
                     };
                     let src = &self.langs[s];
+                    match caps_rule(tok, src, tgt) {
+                        Some(CapsRule::Keep) => {
+                            out.text.push_str(tok);
+                            out.kept_tokens += 1;
+                            continue;
+                        }
+                        Some(CapsRule::Abbreviation(a)) => {
+                            out.text.push_str(&a);
+                            out.converted_tokens += 1;
+                            continue;
+                        }
+                        Some(CapsRule::Word) | None => {}
+                    }
                     let (best, best_cost) = best_candidate(tok, src, tgt, last, last && sentence);
                     let margin = token_cost(tok, src, last) - best_cost;
                     if looks_technical(tok, &best) {
@@ -379,6 +420,20 @@ impl Converter {
             if t == s {
                 continue;
             }
+            let caps = match caps_rule(tok, src, tgt) {
+                // QA-WF-01: `Send it to ЖКХ ещвфн` keeps `ЖКХ`.
+                Some(CapsRule::Keep) => Some(TokenDecision::Keep),
+                Some(CapsRule::Abbreviation(a)) => Some(TokenDecision::Convert(a)),
+                Some(CapsRule::Word) | None => None,
+            };
+            if let Some(this) = caps {
+                decision = match (decision, this) {
+                    (TokenDecision::Keep, d) => d,
+                    (d, TokenDecision::Keep) => d,
+                    _ => TokenDecision::Ambiguous,
+                };
+                continue;
+            }
             let (best, best_cost) = best_candidate(tok, src, tgt, last, sentence_end);
             if looks_technical(tok, &best) {
                 return TokenDecision::Keep;
@@ -427,6 +482,56 @@ enum TokenDecision {
     Keep,
     Convert(String),
     Ambiguous,
+}
+
+/// Shortest and longest all-caps token the abbreviation rule applies to (letters).
+const ABBREVIATION_LETTERS: std::ops::RangeInclusive<usize> = 2..=5;
+
+/// Outcome of the all-caps abbreviation rule.
+enum CapsRule {
+    /// A correct abbreviation (or no evidence of a wrong layout): leave the token as typed.
+    Keep,
+    /// The token is a listed abbreviation of the target typed in the wrong layout.
+    Abbreviation(String),
+    /// The re-typing is a dictionary word: the usual decision applies.
+    Word,
+}
+
+/// All-caps tokens of 2-5 letters (QA-WF-01/02). Such a token is an abbreviation far more
+/// often than a word typed with Caps Lock, and the character model cannot tell a correct
+/// `PDF` from a mistyped one. It is converted only if its key-for-key re-typing is a listed
+/// abbreviation (`ЗВА` -> `PDF`) or a dictionary word of the target; a listed abbreviation
+/// of its own language always stays. `None`: not an all-caps token, the rule does not apply.
+/// Leading `(`/quotes and trailing sentence punctuation are allowed around the letters.
+fn caps_rule(tok: &str, src: &Language, tgt: &Language) -> Option<CapsRule> {
+    let core = tok
+        .trim_start_matches(['(', '"', '«', '\''])
+        .trim_end_matches(['.', ',', '!', '?', ':', ';', ')', '"', '»', '\'']);
+    let n = core.chars().count();
+    if !ABBREVIATION_LETTERS.contains(&n)
+        || !core
+            .chars()
+            .all(|c| c.is_uppercase() && src.model.is_letter(c))
+    {
+        return None;
+    }
+    if src.model.knows_abbreviation(core) {
+        return Some(CapsRule::Keep);
+    }
+    let converted = literal_token(core, src, tgt);
+    let letters = converted.chars().all(|c| tgt.model.is_letter(c));
+    if letters && tgt.model.knows_abbreviation(&converted) {
+        // With punctuation around it the usual decision re-types the token as a whole.
+        return Some(if core.len() == tok.len() {
+            CapsRule::Abbreviation(converted)
+        } else {
+            CapsRule::Word
+        });
+    }
+    if letters && tgt.model.knows(&converted.to_lowercase()) {
+        return Some(CapsRule::Word);
+    }
+    Some(CapsRule::Keep)
 }
 
 /// `true` if every letter run of `s` is a dictionary word of `lang` (and there is one).

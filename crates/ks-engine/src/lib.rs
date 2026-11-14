@@ -189,6 +189,12 @@ pub trait Platform {
     fn verify(&mut self, expected: &UserText) -> bool;
     /// Asks the target to switch to the keyboard layout of language `lang` (`"ru"`, `"en"`).
     fn switch_layout(&mut self, lang: &str) -> bool;
+    /// Opaque identity of the captured field (window, process), valid after
+    /// [`Platform::begin`]. Lets [`History`] undo the previous conversion in the same field.
+    /// `None` (the default): no undo-style toggle.
+    fn field_key(&self) -> Option<u64> {
+        None
+    }
     /// Asks the user which of `langs` the text should become (low confidence or mixed
     /// text). Must not show or keep the text. Nothing has been written yet; the write that
     /// follows re-checks the target and the operation generation.
@@ -300,10 +306,101 @@ impl From<Stop> for Outcome {
 }
 
 /// Runs one conversion operation. Never panics on user data and never returns text.
+/// No undo-style toggle (see [`run_with_history`]).
 pub fn run<P: Platform>(platform: &mut P, converter: &Converter, config: &Config) -> Outcome {
-    match run_inner(platform, converter, config) {
+    run_with_history(platform, converter, config, &mut History::default())
+}
+
+/// As [`run`], remembering the last conversion in `history`: if the next press in the same
+/// field finds exactly the text this conversion wrote (before the caret, or selected), it
+/// writes back what was there before - a wrong guess is undone with the same hotkey
+/// (QA-WF-02). The toggle works again in the other direction.
+pub fn run_with_history<P: Platform>(
+    platform: &mut P,
+    converter: &Converter,
+    config: &Config,
+    history: &mut History,
+) -> Outcome {
+    match run_inner(platform, converter, config, history) {
         Ok(outcome) => outcome,
         Err(stop) => stop.into(),
+    }
+}
+
+/// How long the last conversion can be undone by pressing the hotkey again.
+pub const TOGGLE_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The last conversion, kept for the undo-style toggle. Holds user text only as
+/// [`UserText`] (wiped on drop) and at most [`TOGGLE_WINDOW`]; `Debug` shows no text.
+#[derive(Default)]
+pub struct History {
+    last: Option<LastConversion>,
+}
+
+struct LastConversion {
+    field: u64,
+    at: std::time::Instant,
+    /// The text before the conversion.
+    before: UserText,
+    /// The text the conversion wrote.
+    after: UserText,
+    /// Language of `before`, for the layout switch on the way back.
+    before_lang: Option<String>,
+}
+
+impl LastConversion {
+    /// The text to write back and its language, if `source` in `field` is exactly what this
+    /// conversion wrote.
+    fn toggle(self, field: Option<u64>, source: &UserText) -> Option<(Option<String>, UserText)> {
+        (Some(self.field) == field && self.after.same_as(source))
+            .then_some((self.before_lang, self.before))
+    }
+}
+
+impl std::fmt::Debug for History {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("History")
+            .field("held", &self.last.is_some())
+            .finish()
+    }
+}
+
+impl History {
+    /// Forgets the last conversion (macro run, pause, quit).
+    pub fn clear(&mut self) {
+        self.last = None;
+    }
+
+    /// Forgets the last conversion once [`TOGGLE_WINDOW`] has passed.
+    pub fn expire(&mut self) {
+        if self
+            .last
+            .as_ref()
+            .is_some_and(|l| l.at.elapsed() > TOGGLE_WINDOW)
+        {
+            self.last = None;
+        }
+    }
+
+    /// `true` while a conversion can be undone.
+    pub fn is_held(&self) -> bool {
+        self.last.is_some()
+    }
+
+    fn record(
+        &mut self,
+        field: Option<u64>,
+        before: &UserText,
+        after: &UserText,
+        before_lang: Option<String>,
+    ) {
+        self.last = field.map(|field| LastConversion {
+            field,
+            at: std::time::Instant::now(),
+            before: UserText::new(before.expose().to_owned()),
+            after: UserText::new(after.expose().to_owned()),
+            before_lang,
+        });
     }
 }
 
@@ -351,8 +448,13 @@ fn run_inner<P: Platform>(
     platform: &mut P,
     converter: &Converter,
     config: &Config,
+    history: &mut History,
 ) -> Result<Outcome, Stop> {
+    // Only the very next press may undo the last conversion: every press consumes it.
+    history.expire();
+    let previous = history.last.take();
     admit(platform, config)?;
+    let field = platform.field_key();
 
     // One unit more than the limit, to tell "exactly at the limit" from "longer".
     let selection = platform
@@ -383,56 +485,12 @@ fn run_inner<P: Platform>(
         ConvertMode::Literal
     };
 
-    let (to, converted) = match converter.detect(source.expose()) {
-        Detection::NoLetters => return Ok(Outcome::Nothing),
-        Detection::Mixed(_) => {
-            // Letters of several languages: first a per-token decision (only words that are
-            // confidently in the wrong layout change); the layout follows the last word.
-            let auto = converter.convert_mixed_auto(source.expose(), mode);
-            match last_word_language(converter, &auto.text) {
-                Some(l) if auto.confidence == Confidence::High => (l, UserText::new(auto.text)),
-                _ => {
-                    // Unclear tokens: only the user knows which language was meant.
-                    let to = ask(platform, converter, Refusal::Mixed)?;
-                    let Ok(conversion) = converter.convert_mixed_with(source.expose(), &to, mode)
-                    else {
-                        return Ok(Outcome::Nothing);
-                    };
-                    (to, UserText::new(conversion.text))
-                }
-            }
-        }
-        Detection::Single(from) => {
-            let Some(to) = converter
-                .languages()
-                .find(|l| *l != from)
-                .map(str::to_owned)
-            else {
-                return Ok(Outcome::Nothing);
-            };
-            let Ok(conversion) = converter.convert_with(source.expose(), &from, &to, mode) else {
-                return Ok(Outcome::Nothing);
-            };
-            let confidence = conversion.confidence;
-            let converted = UserText::new(conversion.text);
-            if confidence == Confidence::Low {
-                let picked = ask(platform, converter, Refusal::LowConfidence)?;
-                if picked == from {
-                    // The user confirms the text is already in the right language.
-                    return Ok(Outcome::Nothing);
-                }
-                if picked != to {
-                    let Ok(other) = converter.convert_with(source.expose(), &from, &picked, mode)
-                    else {
-                        return Ok(Outcome::Nothing);
-                    };
-                    (picked, UserText::new(other.text))
-                } else {
-                    (to, converted)
-                }
-            } else {
-                (to, converted)
-            }
+    let (to, converted) = match previous.and_then(|p| p.toggle(field, &source)) {
+        // The same hotkey again on exactly what the last conversion wrote: undo it.
+        Some((lang, before)) => (lang, before),
+        None => {
+            let (to, converted) = decide(platform, converter, &source, mode)?;
+            (Some(to), converted)
         }
     };
     if converted.same_as(&source) {
@@ -449,10 +507,74 @@ fn run_inner<P: Platform>(
     }
     let verified = platform.verify(&converted);
     // The layout follows the text: no switch unless the write was confirmed.
-    let layout_switched = verified && platform.switch_layout(&to);
+    let layout_switched = verified && to.as_deref().is_some_and(|l| platform.switch_layout(l));
+    let from = last_word_language(converter, source.expose());
+    history.record(field, &source, &converted, from);
     Ok(Outcome::Converted {
         verified,
         layout_switched,
+    })
+}
+
+/// Target language and converted text of `source`, asking the user when unclear.
+fn decide<P: Platform>(
+    platform: &mut P,
+    converter: &Converter,
+    source: &UserText,
+    mode: ConvertMode,
+) -> Result<(String, UserText), Stop> {
+    let nothing = || Ok((String::new(), UserText::new(source.expose().to_owned())));
+    Ok(match converter.detect(source.expose()) {
+        Detection::NoLetters => return nothing(),
+        Detection::Mixed(_) => {
+            // Letters of several languages: first a per-token decision (only words that are
+            // confidently in the wrong layout change); the layout follows the last word.
+            let auto = converter.convert_mixed_auto(source.expose(), mode);
+            match last_word_language(converter, &auto.text) {
+                Some(l) if auto.confidence == Confidence::High => (l, UserText::new(auto.text)),
+                _ => {
+                    // Unclear tokens: only the user knows which language was meant.
+                    let to = ask(platform, converter, Refusal::Mixed)?;
+                    let Ok(conversion) = converter.convert_mixed_with(source.expose(), &to, mode)
+                    else {
+                        return nothing();
+                    };
+                    (to, UserText::new(conversion.text))
+                }
+            }
+        }
+        Detection::Single(from) => {
+            let Some(to) = converter
+                .languages()
+                .find(|l| *l != from)
+                .map(str::to_owned)
+            else {
+                return nothing();
+            };
+            let Ok(conversion) = converter.convert_with(source.expose(), &from, &to, mode) else {
+                return nothing();
+            };
+            let confidence = conversion.confidence;
+            let converted = UserText::new(conversion.text);
+            if confidence == Confidence::Low {
+                let picked = ask(platform, converter, Refusal::LowConfidence)?;
+                if picked == from {
+                    // The user confirms the text is already in the right language.
+                    return nothing();
+                }
+                if picked != to {
+                    let Ok(other) = converter.convert_with(source.expose(), &from, &picked, mode)
+                    else {
+                        return nothing();
+                    };
+                    (picked, UserText::new(other.text))
+                } else {
+                    (to, converted)
+                }
+            } else {
+                (to, converted)
+            }
+        }
     })
 }
 

@@ -1,0 +1,57 @@
+# Upper-case Russian abbreviations (QA-WF-01/02). One per line, 2-5 letters.
+# An all-caps token of 2-5 letters is converted from the other layout only if it becomes
+# one of these (or a dictionary word); a listed one is never converted.
+# Written by the KeySwitch team; same license as the code.
+АО
+ВВП
+ВК
+ВУЗ
+ГАИ
+ГИБДД
+ГОСТ
+ГУ
+ДТП
+ЕГЭ
+ЕС
+ЖЖ
+ЖКХ
+ЖЭК
+ЗАО
+ЗП
+ИНН
+ИП
+КПП
+МВД
+МГУ
+МФЦ
+МЧС
+НДС
+НДФЛ
+НИИ
+ОАО
+ОГРН
+ОК
+ООН
+ООО
+ОС
+ПАО
+ПДД
+ПДФ
+ПК
+ПО
+РЖД
+РФ
+СБП
+СМИ
+СНИЛС
+СНГ
+СССР
+США
+ТВ
+ТЦ
+УК
+ФИО
+ФНС
+ФСБ
+ЦБ
+ЧП

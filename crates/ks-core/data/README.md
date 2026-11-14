@@ -3,6 +3,7 @@
 | File | Source | License |
 |------|--------|---------|
 | `en.freq`, `ru.freq` | Top 30 000 words (letters only) from [FrequencyWords](https://github.com/hermitdave/FrequencyWords) `content/2018/{en,ru}/*_50k.txt`, built from OpenSubtitles 2018, by Hermit Dave | **CC-BY-SA-4.0** |
+| `en.abbr`, `ru.abbr` | Upper-case abbreviations written by the KeySwitch team (QA-WF-01/02) | same as the code |
 
 The files are data, distributed under their own license, separately from KeySwitch code.
 **Release blocker (R-7):** the licensing approach for shipped model data must be approved by the owner before release — see `docs/spikes/S-1-converter-model.md`.

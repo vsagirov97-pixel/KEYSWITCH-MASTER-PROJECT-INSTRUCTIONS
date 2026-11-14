@@ -28,13 +28,15 @@ pub fn builtin() -> Result<Converter, LayoutError> {
         Language {
             id: lang::EN.into(),
             layout: Layout::parse("en-us", include_str!("../layouts/en-us.layout"))?,
-            model: LanguageModel::from_frequency_list(include_str!("../data/en.freq")),
+            model: LanguageModel::from_frequency_list(include_str!("../data/en.freq"))
+                .with_abbreviations(include_str!("../data/en.abbr")),
             joiners: vec!['\''],
         },
         Language {
             id: lang::RU.into(),
             layout: Layout::parse("ru", include_str!("../layouts/ru.layout"))?,
-            model: LanguageModel::from_frequency_list(include_str!("../data/ru.freq")),
+            model: LanguageModel::from_frequency_list(include_str!("../data/ru.freq"))
+                .with_abbreviations(include_str!("../data/ru.abbr")),
             joiners: vec![],
         },
     ]))

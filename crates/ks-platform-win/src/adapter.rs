@@ -22,8 +22,8 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use ks_engine::{
-    Choice, Config, Failure, Macro, MacroRunner, Outcome, Platform, Refusal, Stop, TargetInfo,
-    UserText,
+    Choice, Config, Failure, History, Macro, MacroRunner, Outcome, Platform, Refusal, Stop,
+    TargetInfo, UserText,
 };
 use windows::Win32::UI::Accessibility::IUIAutomationElement;
 
@@ -633,6 +633,22 @@ impl Platform for WinPlatform<'_> {
         }
     }
 
+    fn field_key(&self) -> Option<u64> {
+        use std::hash::{Hash, Hasher};
+        // Same window, focus, process and process instance = same field for the toggle;
+        // the engine additionally requires the exact text it wrote.
+        let fp = self.target.as_ref()?.fp;
+        let mut h = std::hash::DefaultHasher::new();
+        (
+            fp.foreground.as_isize(),
+            fp.focus.as_isize(),
+            fp.pid,
+            fp.start_time,
+        )
+            .hash(&mut h);
+        Some(h.finish())
+    }
+
     fn switch_layout(&mut self, lang: &str) -> bool {
         // Primary language ids (low 10 bits of the LANGID).
         let want: u16 = match lang {
@@ -722,12 +738,15 @@ pub fn spawn_worker(
         .spawn(move || {
             let com = ComGuard::mta();
             let uia = com.as_ref().ok().and_then(|_| Uia::new().ok());
+            // The last conversion, for the undo-style toggle (QA-WF-02). Wiped on drop.
+            let mut history = History::default();
             loop {
                 let job = match rx.recv_timeout(HOLD_POLL) {
                     Ok(job) => job,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // A held clipboard snapshot lives at most `w2::HOLD_MAX`.
                         thread_hold.expire();
+                        history.expire();
                         continue;
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -749,8 +768,15 @@ pub fn spawn_worker(
                                 thread_hold.clone(),
                             );
                             match &slot {
-                                None => ks_engine::run(&mut platform, &converter, &cfg),
+                                None => ks_engine::run_with_history(
+                                    &mut platform,
+                                    &converter,
+                                    &cfg,
+                                    &mut history,
+                                ),
                                 Some(slot) => {
+                                    // A macro changes the field: no undo across it.
+                                    history.clear();
                                     ks_engine::run_macro(&mut platform, slot, &mut runner, &cfg)
                                 }
                             }
@@ -758,6 +784,9 @@ pub fn spawn_worker(
                         None => Outcome::Refused(Refusal::Unsupported),
                     };
                     on_outcome(outcome);
+                } else {
+                    // Paused: the press is consumed, nothing can be undone after it.
+                    history.clear();
                 }
                 drop(slot);
                 // Presses during the operation are ignored, not queued.
