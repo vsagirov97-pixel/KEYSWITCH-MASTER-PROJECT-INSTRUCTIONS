@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, type Hotkey, type HotkeyResult, type Settings, type Theme, type UiLanguage } from "../api";
 import { HotkeyCapture } from "../components/HotkeyCapture";
+import { LastOperationStatus } from "../components/OperationStatus";
 import { Card, InlineAlert, PageTitle, Segmented, SettingRow, Toggle } from "../components/ui";
 import { useT } from "../i18n";
 
@@ -136,6 +137,9 @@ export function GeneralPage({ settings, onChange }: GeneralPageProps) {
             ) : null
           }
         />
+      </Card>
+      <Card title={t("lastOp.title")}>
+        <LastOperationStatus />
       </Card>
     </div>
   );

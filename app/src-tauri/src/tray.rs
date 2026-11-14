@@ -1,4 +1,5 @@
-//! Tray menu model and commands (the icon itself is `ks_platform_win::tray`). Mirrors the UI's tray model (`app/src/tray/model.ts`): same command
+//! Tray menu model, icon state (active / paused / attention) and commands (the icon itself
+//! is `ks_platform_win::tray`). Mirrors the UI's tray model (`app/src/tray/model.ts`): same command
 //! ids, same structure, labels in the UI language (texts copied from `app/src/i18n`).
 
 use std::sync::Arc;
@@ -6,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 
-use crate::os::{self, TrayEntry, TrayEvent, TrayModel};
+use crate::os::{self, TrayEntry, TrayEvent, TrayModel, TrayState};
 use crate::settings::UiLanguage;
 use crate::{Pause, Shared, lock};
 
@@ -130,12 +131,13 @@ fn build_model(shared: &Shared) -> TrayModel {
         item(CMD_QUIT, l.quit),
     ]);
 
-    let status = if !matches!(pause, Pause::Active) {
-        l.status_paused
-    } else if lock(&shared.registration).is_none() {
-        l.status_attention
+    let (state, status) = if !matches!(pause, Pause::Active) {
+        (TrayState::Paused, l.status_paused)
+    } else if lock(&shared.registration).is_none() || shared.worker.get().is_none() {
+        // Hotkey conflict / registration error, or the worker thread could not start.
+        (TrayState::Attention, l.status_attention)
     } else {
-        l.status_active
+        (TrayState::Active, l.status_active)
     };
     let mut tooltip = format!("KeySwitch — {status} · {hotkey}");
     // Last operation: shown only when it was refused or failed — a reason message from
@@ -147,7 +149,11 @@ fn build_model(shared: &Shared) -> TrayModel {
         tooltip.push_str(" · ");
         tooltip.push_str(reason);
     }
-    TrayModel { tooltip, menu }
+    TrayModel {
+        tooltip,
+        menu,
+        state,
+    }
 }
 
 /// Shows (and focuses) the settings window.

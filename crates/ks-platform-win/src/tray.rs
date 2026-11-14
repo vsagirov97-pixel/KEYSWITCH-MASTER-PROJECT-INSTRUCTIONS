@@ -14,14 +14,18 @@ use windows::Win32::UI::Shell::{
     Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu, DispatchMessageW,
-    GetCursorPos, GetMessageW, HICON, HMENU, IDI_APPLICATION, LoadIconW, MF_DISABLED, MF_GRAYED,
-    MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    RegisterWindowMessageW, SetForegroundWindow, SetMenuDefaultItem, TPM_NONOTIFY, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_CLOSE,
-    WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WNDCLASSW, WS_OVERLAPPED,
+    AppendMenuW, CreateIconFromResourceEx, CreatePopupMenu, CreateWindowExW, DefWindowProcW,
+    DestroyIcon, DestroyMenu, DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics, HICON,
+    HMENU, IDI_APPLICATION, LR_DEFAULTCOLOR, LoadIconW, MF_DISABLED, MF_GRAYED, MF_POPUP,
+    MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
+    RegisterWindowMessageW, SM_CXSMICON, SetForegroundWindow, SetMenuDefaultItem, TPM_NONOTIFY,
+    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP,
+    WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WNDCLASSW,
+    WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
+
+pub use crate::tray_icon::IconState;
 
 /// One entry of the popup menu.
 #[derive(Clone, Debug)]
@@ -64,6 +68,8 @@ pub struct Model {
     pub tooltip: String,
     /// Popup menu.
     pub menu: Vec<Entry>,
+    /// Which of the three embedded icons is shown.
+    pub state: IconState,
 }
 
 /// Handle of the tray icon; dropping it removes the icon.
@@ -83,7 +89,10 @@ struct State {
     model: Arc<Mutex<Model>>,
     on_event: Box<dyn Fn(Event)>,
     taskbar_created: u32,
-    icon: HICON,
+    /// Icons of [`IconState::ALL`], in that order; the application icon where one failed.
+    icons: [HICON; 3],
+    /// Icons this thread created and must destroy.
+    owned: Vec<HICON>,
 }
 
 thread_local! {
@@ -124,7 +133,12 @@ fn icon_data(hwnd: HWND, icon: HICON, tooltip: &str) -> NOTIFYICONDATAW {
 fn notify(hwnd: HWND, add: bool) {
     STATE.with_borrow(|state| {
         if let Some(state) = state {
-            let data = icon_data(hwnd, state.icon, &lock(&state.model).tooltip);
+            let (tooltip, which) = {
+                let model = lock(&state.model);
+                (model.tooltip.clone(), model.state)
+            };
+            let index = IconState::ALL.iter().position(|s| *s == which).unwrap_or(0);
+            let data = icon_data(hwnd, state.icons[index], &tooltip);
             // SAFETY: `data` is a fully initialised NOTIFYICONDATAW with its size set.
             let _ = unsafe { Shell_NotifyIconW(if add { NIM_ADD } else { NIM_MODIFY }, &data) };
         }
@@ -260,6 +274,31 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
     }
 }
 
+/// The three state icons from the embedded `.ico` data, at the small-icon size of the
+/// system. A state whose icon cannot be created shows `fallback` (the application icon).
+fn state_icons(fallback: HICON) -> ([HICON; 3], Vec<HICON>) {
+    // SAFETY: GetSystemMetrics only reads a system value.
+    let size = unsafe { GetSystemMetrics(SM_CXSMICON) }.clamp(16, 256);
+    let mut icons = [fallback; 3];
+    let mut owned = Vec::new();
+    for (slot, state) in icons.iter_mut().zip(IconState::ALL) {
+        let Some((image, _)) = crate::tray_icon::pick_image(state.ico(), size.unsigned_abs())
+        else {
+            continue;
+        };
+        // SAFETY: `image` is one complete icon image (BITMAPINFOHEADER + XOR + AND mask) of
+        // a compile-time constant file, validated by `pick_image`; 0x0003_0000 is the
+        // documented format version. The returned icon is owned by this thread.
+        if let Ok(icon) = unsafe {
+            CreateIconFromResourceEx(image, true, 0x0003_0000, size, size, LR_DEFAULTCOLOR)
+        } {
+            *slot = icon;
+            owned.push(icon);
+        }
+    }
+    (icons, owned)
+}
+
 /// Creates the tray icon on a new thread. `on_event` runs on that thread and must return
 /// quickly. `None` if the window or the thread could not be created.
 pub fn spawn(model: Model, on_event: impl Fn(Event) + Send + 'static) -> Option<Tray> {
@@ -302,6 +341,7 @@ pub fn spawn(model: Model, on_event: impl Fn(Event) + Send + 'static) -> Option<
                     .unwrap_or_default();
                 (hwnd, icon, RegisterWindowMessageW(w!("TaskbarCreated")))
             };
+            let (icons, owned) = state_icons(icon);
             let Ok(hwnd) = hwnd else {
                 let _ = ready_tx.send(0);
                 return;
@@ -310,7 +350,8 @@ pub fn spawn(model: Model, on_event: impl Fn(Event) + Send + 'static) -> Option<
                 model: thread_model,
                 on_event: Box::new(on_event),
                 taskbar_created,
-                icon,
+                icons,
+                owned,
             }));
             notify(hwnd, true);
             let _ = ready_tx.send(hwnd.0 as isize);
@@ -322,7 +363,13 @@ pub fn spawn(model: Model, on_event: impl Fn(Event) + Send + 'static) -> Option<
                     DispatchMessageW(&msg);
                 }
             }
-            STATE.set(None);
+            if let Some(state) = STATE.take() {
+                for icon in state.owned {
+                    // SAFETY: icons created by `state_icons` on this thread, no longer shown
+                    // (the notification icon was deleted in WM_DESTROY).
+                    let _ = unsafe { DestroyIcon(icon) };
+                }
+            }
         })
         .ok()?;
     match ready_rx.recv() {

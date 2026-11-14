@@ -16,10 +16,12 @@
 //! The W2 clipboard method ([`clipboard`], [`w2`]; D-26 / CISO Q-1 contract, verified in S-2b)
 //! is used only for applications listed in the [`profiles`] table.
 //!
-//! On non-Windows targets only [`policy`] and [`profiles`] (pure code and data) are compiled.
+//! On non-Windows targets only [`policy`], [`profiles`] and [`tray_icon`] (pure code and data)
+//! are compiled.
 
 pub mod policy;
 pub mod profiles;
+pub mod tray_icon;
 
 #[cfg(windows)]
 pub mod adapter;

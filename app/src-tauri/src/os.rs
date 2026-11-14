@@ -25,6 +25,7 @@ mod imp {
     pub type TrayEntry = tray::Entry;
     pub type TrayEvent = tray::Event;
     pub type TrayModel = tray::Model;
+    pub type TrayState = tray::IconState;
 
     pub fn spawn_tray(model: TrayModel, f: impl Fn(TrayEvent) + Send + 'static) -> Option<Tray> {
         tray::spawn(model, f)
@@ -156,10 +157,19 @@ mod imp {
         Command(u32),
     }
 
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub enum TrayState {
+        #[default]
+        Active,
+        Paused,
+        Attention,
+    }
+
     #[derive(Clone, Debug, Default)]
     pub struct TrayModel {
         pub tooltip: String,
         pub menu: Vec<TrayEntry>,
+        pub state: TrayState,
     }
 
     pub fn spawn_tray(_model: TrayModel, _f: impl Fn(TrayEvent) + Send + 'static) -> Option<Tray> {
