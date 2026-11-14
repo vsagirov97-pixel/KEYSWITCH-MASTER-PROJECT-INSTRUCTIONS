@@ -16,6 +16,7 @@
 #         removed; the exe, the shortcut, the Add/Remove entry are gone; other Run values
 #         and the sibling folder are unchanged.
 # Prints metadata only. Exits non-zero on the first failed check.
+# CI ONLY: refuses to start unless GITHUB_ACTIONS is 'true' (it removes the user's app data).
 param(
   [string]$BundleDir = "target/release/bundle/nsis"
 )
@@ -28,6 +29,10 @@ function Fail([string]$why) {
   Write-Output "::error title=installer round trip::$why"
   exit 1
 }
+
+# QA-WF-07: this script installs and uninstalls KeySwitch, deletes %APPDATA%\KeySwitch and
+# rewrites the Run value. It must never run on a user's PC: GitHub Actions runners only.
+if ($env:GITHUB_ACTIONS -ne 'true') { Fail 'CI only: refusing to run outside GitHub Actions' }
 
 function Get-RunValues {
   $props = Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue
