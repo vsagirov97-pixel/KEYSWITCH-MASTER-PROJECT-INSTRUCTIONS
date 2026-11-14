@@ -8,8 +8,13 @@
 #   2b. QA-WF-05: settings that say autostart was enabled, but no Run value (a manual update
 #      ran the old uninstaller without /UPDATE) -> the app re-creates the Run value at start;
 #   3. the HKCU Run value "KeySwitch" is written as the app writes it on enable;
-#   4. silent uninstall -> the exe, the shortcut, the Add/Remove entry and the Run value are
-#      gone; other Run values are unchanged.
+#   4. app data (QA-WF-04) and autostart through three uninstalls, with a marker in the real
+#      %APPDATA%\KeySwitch and a sibling folder that must never be touched:
+#      a. `/S /UPDATE /DELETEAPPDATA` (the upgrade path) -> Run value and data folder kept;
+#      b. reinstall, `/S` (no checkbox) -> Run value removed, data folder kept;
+#      c. reinstall, `/S /DELETEAPPDATA` (= the checkbox) -> exactly %APPDATA%\KeySwitch is
+#         removed; the exe, the shortcut, the Add/Remove entry are gone; other Run values
+#         and the sibling folder are unchanged.
 # Prints metadata only. Exits non-zero on the first failed check.
 param(
   [string]$BundleDir = "target/release/bundle/nsis"
@@ -122,13 +127,60 @@ try {
 # 3. Autostart value as `os::set_autostart` writes it.
 Set-ItemProperty -Path $runKey -Name $valueName -Value "`"$($exe.FullName)`" --background"
 
-# 4. Silent uninstall (NSIS copies the uninstaller to %TEMP% and returns early: poll).
-$p = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -PassThru
-if ($p.ExitCode -ne 0) { Fail "uninstaller exit code $($p.ExitCode)" }
-$deadline = (Get-Date).AddSeconds(60)
-while ((Test-Path $exe.FullName) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
-Start-Sleep -Seconds 2
-if (Test-Path $exe.FullName) { Fail 'application exe still present after uninstall' }
+# 4. Uninstalls (NSIS copies the uninstaller to %TEMP% and returns early: poll).
+$dataDir = Join-Path $realAppData 'KeySwitch'
+$sibling = Join-Path $realAppData 'KeySwitch-roundtrip-sibling'
+if ((Test-Path $dataDir) -or (Test-Path $sibling)) { Fail "$dataDir exists before the test (runner not clean)" }
+New-Item -ItemType Directory -Force -Path $dataDir, $sibling | Out-Null
+[IO.File]::WriteAllText((Join-Path $dataDir 'settings.json'), '{ "uiLanguage": "en" }')
+[IO.File]::WriteAllText((Join-Path $sibling 'keep.txt'), 'keep')
+
+function Invoke-Uninstall([string[]]$arguments) {
+  $entry = Get-UninstallEntry
+  if (-not $entry) { Fail 'no Add/Remove Programs entry before uninstall' }
+  $u = ($entry.UninstallString -replace '"', '').Trim()
+  $p = Start-Process -FilePath $u -ArgumentList $arguments -Wait -PassThru
+  if ($p.ExitCode -ne 0) { Fail "uninstaller ($($arguments -join ' ')) exit code $($p.ExitCode)" }
+  $deadline = (Get-Date).AddSeconds(60)
+  while ((Test-Path $exe.FullName) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+  Start-Sleep -Seconds 2
+  if (Test-Path $exe.FullName) { Fail "application exe still present after uninstall ($($arguments -join ' '))" }
+}
+
+function Invoke-Install {
+  $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+  if ($p.ExitCode -ne 0) { Fail "re-install exit code $($p.ExitCode)" }
+  if (-not (Test-Path $exe.FullName)) { Fail 'application exe missing after re-install' }
+}
+
+# 4a. Upgrade path: nothing of the user's is removed, even with the data flag.
+Invoke-Uninstall @('/S', '/UPDATE', '/DELETEAPPDATA')
+if (-not (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue)) {
+  Fail 'Run value removed by an /UPDATE uninstall'
+}
+if (-not (Test-Path (Join-Path $dataDir 'settings.json'))) { Fail 'app data removed by an /UPDATE uninstall' }
+Write-Output 'uninstall /UPDATE: OK (Run value and app data kept)'
+
+# 4b. Real uninstall without the checkbox: app data stays.
+Invoke-Install
+Invoke-Uninstall @('/S')
+if (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue) {
+  Fail 'HKCU Run value KeySwitch still present after uninstall'
+}
+if (-not (Test-Path (Join-Path $dataDir 'settings.json'))) { Fail 'app data removed without the checkbox' }
+Write-Output 'uninstall without data: OK (Run value removed, app data kept)'
+
+# 4c. Real uninstall with the checkbox: exactly %APPDATA%\KeySwitch goes.
+Invoke-Install
+Set-ItemProperty -Path $runKey -Name $valueName -Value "`"$($exe.FullName)`" --background"
+Invoke-Uninstall @('/S', '/DELETEAPPDATA')
+# The hook runs after the files are deleted: give it time.
+$deadline = (Get-Date).AddSeconds(30)
+while ((Test-Path $dataDir) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+$siblingKept = Test-Path (Join-Path $sibling 'keep.txt')
+Remove-Item -Recurse -Force -Path $sibling -ErrorAction SilentlyContinue
+if (Test-Path $dataDir) { Fail "$dataDir still present after uninstall with app data (QA-WF-04)" }
+if (-not $siblingKept) { Fail 'a folder next to %APPDATA%\KeySwitch was touched' }
 if (Test-Path $shortcut.FullName) { Fail 'Start-menu shortcut still present after uninstall' }
 if (Get-UninstallEntry) { Fail 'Add/Remove Programs entry still present after uninstall' }
 if (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue) {
@@ -136,4 +188,4 @@ if (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinu
 }
 $otherRunAfter = Get-RunValues | Where-Object { $_ -notlike "$valueName=*" }
 if ((@($otherRunBefore) -join "`n") -ne (@($otherRunAfter) -join "`n")) { Fail 'other HKCU Run values changed' }
-Write-Output 'uninstall: OK (exe, shortcut, Add/Remove entry and Run value removed; other Run values unchanged)'
+Write-Output 'uninstall: OK (exe, shortcut, Add/Remove entry, Run value and %APPDATA%\KeySwitch removed; other Run values and folders unchanged)'
