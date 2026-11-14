@@ -21,32 +21,6 @@ pub enum CharClass {
     Separator,
 }
 
-/// Inclusive ranges of general category Cf (Unicode 16.0, DerivedGeneralCategory.txt).
-/// Kept as a table so the crate needs no Unicode-data dependency.
-const CF_RANGES: &[(u32, u32)] = &[
-    (0x00AD, 0x00AD),
-    (0x0600, 0x0605),
-    (0x061C, 0x061C),
-    (0x06DD, 0x06DD),
-    (0x070F, 0x070F),
-    (0x0890, 0x0891),
-    (0x08E2, 0x08E2),
-    (0x180E, 0x180E),
-    (0x200B, 0x200F),
-    (0x202A, 0x202E),
-    (0x2060, 0x2064),
-    (0x2066, 0x206F),
-    (0xFEFF, 0xFEFF),
-    (0xFFF9, 0xFFFB),
-    (0x110BD, 0x110BD),
-    (0x110CD, 0x110CD),
-    (0x13430, 0x1343F),
-    (0x1BCA0, 0x1BCA3),
-    (0x1D173, 0x1D17A),
-    (0xE0001, 0xE0001),
-    (0xE0020, 0xE007F),
-];
-
 /// `Some(class)` if `c` must not be injected by W3 (WS-06: Cc, Cf, Zl, Zp).
 ///
 /// Note: this also refuses ZWJ/ZWNJ (U+200D/U+200C, category Cf), i.e. emoji ZWJ
@@ -60,7 +34,8 @@ pub fn forbidden_char(c: char) -> Option<CharClass> {
     if u == 0x2028 || u == 0x2029 {
         return Some(CharClass::Separator);
     }
-    if CF_RANGES.iter().any(|&(lo, hi)| (lo..=hi).contains(&u)) {
+    // One table for the write policy and the macro content policy (`check_content`).
+    if ks_engine::is_format_char(c) {
         return Some(CharClass::Format);
     }
     None

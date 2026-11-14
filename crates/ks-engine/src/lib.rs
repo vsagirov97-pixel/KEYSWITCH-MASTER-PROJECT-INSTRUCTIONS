@@ -12,7 +12,7 @@ mod user_text;
 
 pub use macros::{
     CodeLanguage, ContentError, MACRO_MAX_CHARS, Macro, MacroAction, MacroBody, MacroInput,
-    MacroPermissions, MacroRunner, NoCodeRunner, check_content, run_macro,
+    MacroPermissions, MacroRunner, NoCodeRunner, check_content, is_format_char, run_macro,
 };
 pub use user_text::{UserText, wipe};
 

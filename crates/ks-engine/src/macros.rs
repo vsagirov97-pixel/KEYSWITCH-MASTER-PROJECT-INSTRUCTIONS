@@ -29,7 +29,7 @@ pub enum ContentError {
     /// More than [`MACRO_MAX_CHARS`] characters.
     TooLong,
     /// A control character other than `\n` / `\t`, a line / paragraph separator or a
-    /// bidirectional control.
+    /// format character (bidi control, zero-width character, BOM...).
     ForbiddenChar,
     /// `\n` or `\t` without the slot's permission.
     EnterTabNotPermitted,
@@ -55,14 +55,50 @@ impl ContentError {
     }
 }
 
-/// `true` for characters a macro may never contain: controls (Cc) except `\n` / `\t`,
+/// Inclusive ranges of general category Cf (Unicode 16.0, DerivedGeneralCategory.txt).
+/// Kept as a table so the crate needs no Unicode-data dependency.
+const CF_RANGES: &[(u32, u32)] = &[
+    (0x00AD, 0x00AD),
+    (0x0600, 0x0605),
+    (0x061C, 0x061C),
+    (0x06DD, 0x06DD),
+    (0x070F, 0x070F),
+    (0x0890, 0x0891),
+    (0x08E2, 0x08E2),
+    (0x180E, 0x180E),
+    (0x200B, 0x200F),
+    (0x202A, 0x202E),
+    (0x2060, 0x2064),
+    (0x2066, 0x206F),
+    (0xFEFF, 0xFEFF),
+    (0xFFF9, 0xFFFB),
+    (0x110BD, 0x110BD),
+    (0x110CD, 0x110CD),
+    (0x13430, 0x1343F),
+    (0x1BCA0, 0x1BCA3),
+    (0x1D173, 0x1D17A),
+    (0xE0001, 0xE0001),
+    (0xE0020, 0xE007F),
+];
+
+/// `true` for a character of general category Cf (format: bidi overrides/isolates,
+/// zero-width space/joiners, BOM, soft hyphen, tags...). Shared with the write policy of
+/// `ks-platform-win` (WS-06), so a macro that can be saved is never refused at insert time
+/// for its characters.
+pub fn is_format_char(c: char) -> bool {
+    let u = u32::from(c);
+    CF_RANGES.iter().any(|&(lo, hi)| (lo..=hi).contains(&u))
+}
+
+/// `true` for characters a macro may never contain - the same set the write policy refuses
+/// (WS-06), except `\n` / `\t` (D-18, behind the slot's permission): controls (Cc),
 /// U+2028 / U+2029 (they act as line breaks in many editors and would bypass the Enter
-/// permission) and the bidirectional controls (spoofing of the visible text).
+/// permission) and every format character (Cf: bidi controls spoof the visible text,
+/// zero-width characters hide content).
 fn always_forbidden(c: char) -> bool {
     (c.is_control() && c != '\n' && c != '\t')
-        || matches!(c,
-            '\u{2028}' | '\u{2029}' | '\u{061C}' | '\u{200E}' | '\u{200F}'
-            | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+        || matches!(c, '\u{2028}' | '\u{2029}')
+        || is_format_char(c)
 }
 
 /// Content policy of a macro text (checked when the slot is saved and again before every
@@ -247,8 +283,21 @@ mod tests {
         ] {
             assert_eq!(check_content(bad, ON), Err(ContentError::ForbiddenChar));
         }
-        // Emoji ZWJ sequences stay allowed.
-        assert_eq!(check_content("👩\u{200D}💻", OFF), Ok(()));
+        // Zero-width and other format characters, as the write policy (WS-06) refuses them
+        // at insert time: U+200B..U+200D, U+2060, U+FEFF, soft hyphen, tags.
+        for bad in [
+            "a\u{200B}b",
+            "a\u{200C}b",
+            "👩\u{200D}💻",
+            "a\u{2060}b",
+            "\u{FEFF}a",
+            "a\u{00AD}b",
+            "a\u{E0041}",
+            "a\u{061C}b",
+        ] {
+            assert_eq!(check_content(bad, ON), Err(ContentError::ForbiddenChar));
+        }
+        assert_eq!(check_content("Добрый день! 👋 ok", OFF), Ok(()));
         let max = "ж".repeat(MACRO_MAX_CHARS);
         assert_eq!(check_content(&max, OFF), Ok(()));
         assert_eq!(

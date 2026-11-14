@@ -143,6 +143,9 @@ fn control_and_hidden_line_breaks_are_refused_even_with_permission() {
         "\u{200E}x",
         "\u{2067}x",
         "\u{061C}x",
+        // Zero-width characters: refused like at insert time (WS-06), not only by W3.
+        "\u{200D}",
+        "\u{FEFF}",
     ] {
         for allow in [false, true] {
             let mut s = Spy::default();
@@ -156,7 +159,7 @@ fn control_and_hidden_line_breaks_are_refused_even_with_permission() {
             assert_eq!(s.writes, 0);
         }
     }
-    for ok in ["\n", "\t", "x\n\ny", "\u{200D}", "\u{FEFF}"] {
+    for ok in ["\n", "\t", "x\n\ny", "ok 👋"] {
         let mut s = Spy::default();
         let out = run_macro(
             &mut s,
