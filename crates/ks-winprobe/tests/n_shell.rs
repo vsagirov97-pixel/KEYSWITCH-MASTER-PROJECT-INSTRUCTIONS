@@ -2,8 +2,10 @@
 //!
 //! - n1: autostart through `ks_platform_win::autostart` (the module behind the app's
 //!   `set_autostart`): the HKCU `Run` value `KeySwitch` is written on enable and removed on
-//!   disable, checked independently with `reg.exe`; no other value of the key changes; the
-//!   original state is restored afterwards (also on panic).
+//!   disable, checked independently with `reg.exe`; no other value of the key changes (value
+//!   lines compared by name and data; the key-path header line is not compared, `reg.exe`
+//!   omits it for a key without values); the original state is restored afterwards (also on
+//!   panic). Evidence on a difference: counts and value NAMES only, never data.
 //! - n2: single instance through `ks_platform_win::instance` across two processes: a second
 //!   launch (this test binary re-run as a child) is told it is second — the app's `main`
 //!   then returns — and the first instance receives the activation signal.
@@ -26,7 +28,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use ks_platform_win::{autostart, instance};
-use ks_winprobe::report::Status;
+use ks_winprobe::report::{Report, Status};
 
 /// Name of the `Run` value; must equal `APP_NAME` in `app/src-tauri/src/os.rs`.
 const APP_NAME: &str = "KeySwitch";
@@ -54,16 +56,117 @@ fn reg_query(value: Option<&str>) -> Option<(bool, Vec<String>)> {
     Some((out.status.success(), lines))
 }
 
-/// The `Run` key's values other than ours (the key path header line included).
-fn other_values() -> Option<Vec<String>> {
-    let (_, lines) = reg_query(None)?;
-    let ours = format!("{APP_NAME} ");
-    Some(
-        lines
-            .into_iter()
-            .filter(|l| !l.trim_start().starts_with(&ours))
-            .collect(),
-    )
+/// Snapshot of the `Run` key as `reg.exe` lists it: value lines parsed by name, our value
+/// excluded. The key-path header line and subkey lines are kept apart: `reg.exe` prints the
+/// header only when the key has something to list, so it is not part of "other values".
+struct RunSnapshot {
+    query_ok: bool,
+    /// `reg.exe` printed the key-path header line.
+    header: bool,
+    /// Other value name (lower-case: registry names are case-insensitive) -> rest of the
+    /// line (type and data). Data is only compared, never reported.
+    values: std::collections::BTreeMap<String, String>,
+    /// Subkey lines (full paths); compared only.
+    subkeys: Vec<String>,
+    /// Lines that are neither header, value nor subkey (should be empty).
+    unparsed: usize,
+}
+
+/// Splits a `reg.exe` value line `    <name>    REG_<type>    <data>` into name and rest.
+fn split_value_line(line: &str) -> Option<(String, String)> {
+    let body = line.strip_prefix("    ")?;
+    let pos = body.find("    REG_")?;
+    let name = body[..pos].trim().to_owned();
+    Some((name, body[pos..].trim().to_owned()))
+}
+
+fn run_snapshot() -> Option<RunSnapshot> {
+    let (query_ok, lines) = reg_query(None)?;
+    let key_upper = RUN_KEY
+        .replacen("HKCU", "HKEY_CURRENT_USER", 1)
+        .to_uppercase();
+    let mut snap = RunSnapshot {
+        query_ok,
+        header: false,
+        values: Default::default(),
+        subkeys: Vec::new(),
+        unparsed: 0,
+    };
+    for line in lines {
+        if line.to_uppercase() == key_upper {
+            snap.header = true;
+        } else if let Some((name, rest)) = split_value_line(&line) {
+            if !name.eq_ignore_ascii_case(APP_NAME) {
+                snap.values.insert(name.to_lowercase(), rest);
+            }
+        } else if line.to_uppercase().starts_with(&format!("{key_upper}\\")) {
+            snap.subkeys.push(line);
+        } else {
+            snap.unparsed += 1;
+        }
+    }
+    Some(snap)
+}
+
+/// Names (never data) of other values that were added, removed or changed between snapshots.
+fn changed_names(a: &RunSnapshot, b: &RunSnapshot) -> Vec<String> {
+    let mut names: Vec<String> = a
+        .values
+        .iter()
+        .filter(|(k, v)| b.values.get(*k) != Some(*v))
+        .map(|(k, _)| k.clone())
+        .collect();
+    names.extend(
+        b.values
+            .keys()
+            .filter(|k| !a.values.contains_key(*k))
+            .cloned(),
+    );
+    names
+}
+
+/// "Other values unchanged": same other values (name and data) and same subkeys. The header
+/// line and the query exit code are reported but not compared (they depend on whether the
+/// key has any value at all, i.e. on our own value).
+fn others_equal(a: &RunSnapshot, b: &RunSnapshot) -> bool {
+    a.values == b.values && a.subkeys == b.subkeys
+}
+
+/// Report keys of [`diff_fields`]: query_ok, header, other_count, subkey_count,
+/// unparsed_lines, changed_count, changed_names, subkeys_equal.
+type DiffKeys = [&'static str; 8];
+const ENABLED_KEYS: DiffKeys = [
+    "enabled_query_ok",
+    "enabled_header",
+    "enabled_other_count",
+    "enabled_subkey_count",
+    "enabled_unparsed_lines",
+    "enabled_changed_count",
+    "enabled_changed_names",
+    "enabled_subkeys_equal",
+];
+const DISABLED_KEYS: DiffKeys = [
+    "disabled_query_ok",
+    "disabled_header",
+    "disabled_other_count",
+    "disabled_subkey_count",
+    "disabled_unparsed_lines",
+    "disabled_changed_count",
+    "disabled_changed_names",
+    "disabled_subkeys_equal",
+];
+
+/// Adds the names-only evidence (value names, never data) of comparing `b` with `a`.
+fn diff_fields(r: &mut Report, k: &DiffKeys, a: &RunSnapshot, b: &RunSnapshot) {
+    let names = changed_names(a, b);
+    r.field(k[0], b.query_ok)
+        .field(k[1], b.header)
+        .field(k[2], b.values.len())
+        .field(k[3], b.subkeys.len())
+        .field(k[4], b.unparsed)
+        .field(k[5], names.len())
+        .field(k[6], names.join("|"))
+        .field(k[7], a.subkeys == b.subkeys);
 }
 
 /// Data of our value as `reg.exe` shows it (`None` if absent or not `REG_SZ`).
@@ -104,9 +207,14 @@ fn n1_autostart_run_value_written_and_removed() {
             "a KeySwitch Run value already exists; not touching a real installation",
         );
     }
-    let Some(others_before) = other_values() else {
-        return common::finish(&r, Status::Fail, "reg.exe query failed");
+    let Some(others_before) = run_snapshot() else {
+        return common::finish(&r, Status::Fail, "reg.exe could not be started");
     };
+    r.field("before_query_ok", others_before.query_ok)
+        .field("before_header", others_before.header)
+        .field("before_other_count", others_before.values.len())
+        .field("before_subkey_count", others_before.subkeys.len())
+        .field("before_unparsed_lines", others_before.unparsed);
     let _restore = RestoreAbsent;
     let mut problems: Vec<&'static str> = Vec::new();
 
@@ -136,11 +244,15 @@ fn n1_autostart_run_value_written_and_removed() {
         }
         Some(_) => {}
     }
-    r.field(
-        "enabled_others_unchanged",
-        other_values().as_ref() == Some(&others_before),
-    );
-    if other_values().as_ref() != Some(&others_before) {
+    let others_enabled = run_snapshot();
+    let same = others_enabled
+        .as_ref()
+        .is_some_and(|s| others_equal(&others_before, s));
+    r.field("enabled_others_unchanged", same);
+    if let Some(s) = &others_enabled {
+        diff_fields(&mut r, &ENABLED_KEYS, &others_before, s);
+    }
+    if !same {
         problems.push("other Run values changed on enable");
     }
 
@@ -159,12 +271,15 @@ fn n1_autostart_run_value_written_and_removed() {
     if still || reg_still != Some(false) {
         problems.push("value still present after disable");
     }
-    let others_after = other_values();
-    r.field(
-        "disabled_others_unchanged",
-        others_after.as_ref() == Some(&others_before),
-    );
-    if others_after.as_ref() != Some(&others_before) {
+    let others_after = run_snapshot();
+    let same = others_after
+        .as_ref()
+        .is_some_and(|s| others_equal(&others_before, s));
+    r.field("disabled_others_unchanged", same);
+    if let Some(s) = &others_after {
+        diff_fields(&mut r, &DISABLED_KEYS, &others_before, s);
+    }
+    if !same {
         problems.push("other Run values changed on disable");
     }
     common::verdict(&r, &problems);
