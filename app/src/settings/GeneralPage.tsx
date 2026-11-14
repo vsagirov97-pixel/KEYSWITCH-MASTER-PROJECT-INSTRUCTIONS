@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { api, type Hotkey, type HotkeyResult, type Settings, type Theme, type UiLanguage } from "../api";
-import { HotkeyCapture } from "../components/HotkeyCapture";
+import { api, type Hotkey, type Settings, type Theme, type UiLanguage } from "../api";
+import { HotkeyCapture, type CaptureResult } from "../components/HotkeyCapture";
+import { sameHotkey } from "../hotkey";
 import { LastOperationStatus } from "../components/OperationStatus";
 import { Card, InlineAlert, PageTitle, Segmented, SettingRow, Toggle } from "../components/ui";
 import { useT } from "../i18n";
@@ -17,7 +18,10 @@ export function GeneralPage({ settings, onChange }: GeneralPageProps) {
   const [autostartPending, setAutostartPending] = useState(false);
   const [failed, setFailed] = useState<FailedSetting>(null);
 
-  async function commitHotkey(hotkey: Hotkey): Promise<HotkeyResult> {
+  async function commitHotkey(hotkey: Hotkey): Promise<CaptureResult> {
+    // The backend reports this case as a generic `conflict`; name the macro action instead.
+    const macro = await api.getMacroSlot().catch(() => null);
+    if (macro?.hotkey && sameHotkey(macro.hotkey, hotkey)) return { ok: false, error: "duplicate" };
     const result = await api.setHotkey(hotkey);
     if (result.ok) onChange({ hotkey });
     return result;
@@ -73,6 +77,7 @@ export function GeneralPage({ settings, onChange }: GeneralPageProps) {
             <HotkeyCapture
               id="ks-hotkey"
               actionLabel={t("general.hotkey.label")}
+              otherActionLabel={t("macro.hotkey.label")}
               value={settings.hotkey}
               onCommit={commitHotkey}
             />

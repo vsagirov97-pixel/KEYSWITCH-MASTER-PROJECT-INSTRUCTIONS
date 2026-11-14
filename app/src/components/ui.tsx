@@ -323,6 +323,9 @@ interface ModalProps {
   actionVariant?: "primary" | "danger";
   onCancel: () => void;
   onAction: () => void;
+  /** Optional third button between Cancel and the action (e.g. "Don't save"). */
+  extraLabel?: string;
+  onExtra?: () => void;
 }
 
 export function Modal({
@@ -333,6 +336,8 @@ export function Modal({
   actionVariant = "primary",
   onCancel,
   onAction,
+  extraLabel,
+  onExtra,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -364,6 +369,7 @@ export function Modal({
         <Button ref={cancelRef} onClick={onCancel}>
           {cancelLabel}
         </Button>
+        {extraLabel && onExtra ? <Button onClick={onExtra}>{extraLabel}</Button> : null}
         <Button variant={actionVariant} onClick={onAction}>
           {actionLabel}
         </Button>

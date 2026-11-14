@@ -76,7 +76,7 @@ Contract only; the Macro Studio screen is the UI developer's task. One free slot
   off), `save_failed`.
 - `registered: false` with `enabled: true` and a hotkey means Windows refused the combination at start-up
   (another app owns it): show the same "needs attention" state as for the conversion hotkey.
-- `testRunAvailable` is `false` in this step: show "Test run" disabled.
+- `testRunAvailable` is `false` in this step: the editor hides "Test run" (task decision; the contract note said "disabled").
 - `content` is the user's own text: never put it into logs, telemetry or screenshots with real data.
 - Outcome of a macro run in `last_operation`: `kind: "inserted"`, `code` `MACRO_INSERTED` /
   `MACRO_INSERTED_UNVERIFIED`; refusals use the same codes as conversion (`PASSWORD`, `EXCLUDED_APP`,
@@ -86,6 +86,27 @@ Contract only; the Macro Studio screen is the UI developer's task. One free slot
   in multi-line fields); applications with a clipboard profile get a clipboard paste with the previous clipboard
   restored; anything else is typed (`SendInput`, at most 200 characters, no `\n` / `\t`). Enter and Tab are
   never pressed as keys. The keyboard layout is not switched.
+
+### Macro Studio screen (`feat/ui-macro`, BL-UI-B2 step 1)
+
+Sidebar section **Macro** (`settings/MacroPage.tsx`), text slot only (D-32: no code editor, no JS / Python).
+Screenshots (mock, Chromium on Linux, 960x980 @2x): `macro-light.png` (ru, saved, registered),
+`macro-dark.png` (en, unsaved, Enter/Tab validation error). Dev deep link: `?section=macro`.
+
+- Form: enable toggle, name, hotkey (`HotkeyCapture` with new optional props: empty value "Not set", clear
+  button + Backspace/Delete, external error, custom status pill, `duplicate` error), text area with live
+  `x / 5000` counter, checkbox "Allow Enter and Tab" (D-18) with explanation, plain-text storage warning.
+- Everything is a draft until **Save** (also Ctrl+S); **Discard changes** reverts to the backend state. Leaving the
+  section with unsaved changes opens "Save / Don't save / Cancel" (`Modal` got an optional third button).
+- Client checks in `app/src/macro.ts` mirror `ks_engine::check_content` (Cc except `\n`/`\t`, U+2028/2029,
+  U+061C, U+200E/200F, U+202A–202E, U+2066–2069; `\n`/`\t` only with the permission; 5000 chars counted as
+  Unicode scalar values) and the name rule of `macro_slot.rs` (≤ 64 chars, no Cc). The backend stays
+  authoritative; every `MacroSlotError` is mapped to the field it concerns.
+- The macro hotkey equal to the conversion hotkey is caught in the UI (`duplicate`: "Already used for “Fix
+  layout”"); the same check runs on the General page against the macro hotkey (backend says `conflict`).
+- `save_failed` → warning alert "works but not saved to disk", state re-read from the backend.
+- `registered: false` with `enabled` and a hotkey → danger pill "Needs attention" + inline alert.
+- The text is never logged; it goes only to `api.setMacroSlot`. Fields have `autocomplete="off"`, `spellcheck=false`.
 
 ## Deviations and simplest-option choices (need designer/owner confirmation)
 
@@ -106,8 +127,20 @@ Contract only; the Macro Studio screen is the UI developer's task. One free slot
    OS window, its positioning and focus mode (a/b) are backend/architect work.
 10. Key names on chips are not localised (`Space`, not `Пробел`).
 
+11. **Macro screen** (need designer review): sidebar label «Макрос» / "Macro" instead of the design's untranslated
+    "Macro Studio"; simple settings layout instead of the IDE layout (§4.5) — no type segmented control, no
+    status bar, no permissions panel; the enable toggle is part of the draft (applied on Save), unlike §9.4
+    "applied at once"; clearing the macro hotkey asks no confirmation (it is only a draft until Save);
+    "Allow Enter and Tab" is a native checkbox (no checkbox spec in the design system); Save/Discard are disabled
+    while there are no changes; button order in the leave dialog: Cancel · Don't save · Save.
+12. **Backend rule gap (for the architect):** the save-time rule allows zero-width characters (U+200B–200D, U+FEFF),
+    while `ks_platform_win::policy` refuses format characters at write time, so such a macro saves but may be
+    refused on run (`FORBIDDEN_CHARS`). The UI mirrors the save rule only.
+
 ## Not verified here
 
 Real WebView2 rendering and the Tauri CSP (`style-src 'self'` — the code uses no inline styles, but this was
 only checked in Chromium via the Vite dev server), Narrator/NVDA, high-contrast mode, 125–200 % Windows scaling.
-No frontend test runner exists, so there are no component tests.
+No frontend test runner exists, so there are no component tests. Macro screen: checked only by a scripted
+Playwright run against the mock (save, duplicate hotkey, leave guard); not against the Rust backend, not in WebView2.
+Closing the window with unsaved macro changes is not guarded (no close hook in the UI).
