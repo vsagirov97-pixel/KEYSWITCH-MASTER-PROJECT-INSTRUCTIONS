@@ -51,6 +51,12 @@ pub struct Stored {
     pub excluded_user: Vec<String>,
     /// The single Macro Studio slot (MVP).
     pub macro_slot: MacroSlot,
+    /// The user's last autostart choice in the settings window (`None` = never changed).
+    /// The HKCU Run value is the source of truth for the UI; this only lets the app put the
+    /// value back after a manual update that ran the old uninstaller without `/UPDATE`
+    /// (QA-WF-05).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autostart: Option<bool>,
 }
 
 impl Default for Stored {
@@ -61,6 +67,7 @@ impl Default for Stored {
             theme: Theme::System,
             excluded_user: Vec::new(),
             macro_slot: MacroSlot::default(),
+            autostart: None,
         }
     }
 }
@@ -212,6 +219,30 @@ mod tests {
         std::fs::write(&path, b"{ not json").expect("write");
         save(Some(&path), &Stored::default()).expect("save");
         assert_eq!(load(Some(&path)), Stored::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn autostart_choice_round_trips_and_is_optional() {
+        let dir =
+            std::env::temp_dir().join(format!("ks-settings-autostart-{}", std::process::id()));
+        let path = dir.join("settings.json");
+        // Files written before QA-WF-05 have no `autostart` field.
+        std::fs::create_dir_all(&dir).expect("dir");
+        std::fs::write(&path, br#"{"uiLanguage":"en"}"#).expect("write");
+        assert_eq!(load(Some(&path)).autostart, None);
+        save(Some(&path), &Stored::default()).expect("save");
+        let text = std::fs::read_to_string(&path).expect("read");
+        assert!(
+            !text.contains("autostart"),
+            "not written until the user chooses"
+        );
+        let on = Stored {
+            autostart: Some(true),
+            ..Stored::default()
+        };
+        save(Some(&path), &on).expect("save");
+        assert_eq!(load(Some(&path)).autostart, Some(true));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

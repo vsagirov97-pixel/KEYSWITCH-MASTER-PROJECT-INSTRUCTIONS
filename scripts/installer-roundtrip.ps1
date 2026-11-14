@@ -5,6 +5,8 @@
 #   2. the installed exe with a damaged settings.json (APPDATA redirected to a temporary
 #      folder): the first instance (--background) keeps running (safe defaults), a second
 #      launch exits on its own and the first shows its window (activation signal);
+#   2b. QA-WF-05: settings that say autostart was enabled, but no Run value (a manual update
+#      ran the old uninstaller without /UPDATE) -> the app re-creates the Run value at start;
 #   3. the HKCU Run value "KeySwitch" is written as the app writes it on enable;
 #   4. silent uninstall -> the exe, the shortcut, the Add/Remove entry and the Run value are
 #      gone; other Run values are unchanged.
@@ -92,6 +94,27 @@ try {
   if ($first -and -not $first.HasExited) {
     Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue
     $first.WaitForExit(10000) | Out-Null
+  }
+  $env:APPDATA = $realAppData
+}
+
+# 2b. QA-WF-05: the user's autostart choice from settings.json re-creates a missing Run value.
+[IO.File]::WriteAllText((Join-Path $appData 'KeySwitch\settings.json'), '{ "uiLanguage": "en", "autostart": true }')
+$env:APPDATA = $appData
+try {
+  $app = Start-Process -FilePath $exe.FullName -ArgumentList '--background' -PassThru
+  $deadline = (Get-Date).AddSeconds(20)
+  while (-not (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 1
+  }
+  $restored = (Get-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue).$valueName
+  if (-not $restored) { Fail 'autostart from settings did not re-create the Run value (QA-WF-05)' }
+  if ($restored -notlike "*$($exe.Name)*--background*") { Fail 're-created Run value does not start the installed exe with --background' }
+  Write-Output 'autostart restore: OK (Run value re-created from settings)'
+} finally {
+  if ($app -and -not $app.HasExited) {
+    Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+    $app.WaitForExit(10000) | Out-Null
   }
   $env:APPDATA = $realAppData
 }

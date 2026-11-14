@@ -190,8 +190,12 @@ fn get_settings(shared: Ctx<'_>) -> SettingsDto {
 }
 
 #[tauri::command]
-fn set_autostart(enabled: bool) -> Result<(), String> {
-    os::set_autostart(enabled)
+fn set_autostart(shared: Ctx<'_>, enabled: bool) -> Result<(), String> {
+    os::set_autostart(enabled)?;
+    lock(&shared.stored).autostart = Some(enabled);
+    // The Run value is already changed; a failed save only loses the QA-WF-05 restore.
+    let _ = shared.save();
+    Ok(())
 }
 
 #[tauri::command]
@@ -385,6 +389,12 @@ fn setup(app: &AppHandle, shared: &Arc<Shared>, instance: os::Instance, backgrou
     );
     if let Some(worker) = worker {
         let _ = shared.worker.set(worker);
+    }
+    // QA-WF-05: a manual update that uninstalled the old version first (no `/UPDATE`)
+    // removed the Run value; the user's choice in the settings puts it back. Only ever
+    // re-creates the value the user enabled, never removes one.
+    if lock(&shared.stored).autostart == Some(true) && !os::autostart_enabled() {
+        let _ = os::set_autostart(true);
     }
     let hotkey = lock(&shared.stored).hotkey.clone();
     // A conflict at start-up is shown as the tray status "needs attention".
