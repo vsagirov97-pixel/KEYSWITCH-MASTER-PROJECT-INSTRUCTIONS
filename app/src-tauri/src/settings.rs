@@ -120,11 +120,68 @@ pub fn default_path() -> Option<PathBuf> {
     Some(PathBuf::from(base).join("KeySwitch").join("settings.json"))
 }
 
-/// Loads settings; a missing or damaged file yields the defaults.
+/// Upper bound of `settings.json`; a larger file is treated as damaged.
+const MAX_FILE_BYTES: usize = 256 * 1024;
+
+/// A byte buffer that may hold the Macro Studio text: overwritten with zeroes on drop
+/// (QA-WF-06; own wrapper, no dependency). Never reallocated after it is filled.
+struct Wiped(Vec<u8>);
+
+impl Drop for Wiped {
+    fn drop(&mut self) {
+        self.0.fill(0);
+        // Keeps the optimiser from removing the "dead" store above.
+        std::hint::black_box(&self.0);
+    }
+}
+
+/// Counts the bytes a serialisation produces, so the real buffer is allocated once.
+struct Counter(usize);
+
+impl std::io::Write for Counter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// `stored` as pretty JSON in a buffer of exactly the right size: no reallocation leaves an
+/// unwiped copy of the macro text behind.
+fn encode(stored: &Stored) -> Option<Wiped> {
+    let mut count = Counter(0);
+    serde_json::to_writer_pretty(&mut count, stored).ok()?;
+    let mut buf = Wiped(Vec::with_capacity(count.0));
+    serde_json::to_writer_pretty(&mut buf.0, stored).ok()?;
+    Some(buf)
+}
+
+/// The file's bytes, read into a buffer of the file's size (wiped on drop); `None` if it is
+/// missing, unreadable or larger than [`MAX_FILE_BYTES`].
+fn read_file(path: &Path) -> Option<Wiped> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    if len > MAX_FILE_BYTES {
+        return None;
+    }
+    // One byte more than the size: a file that grew meanwhile is detected without growing.
+    let mut buf = Wiped(Vec::with_capacity(len + 1));
+    (&mut file)
+        .take(u64::try_from(len + 1).ok()?)
+        .read_to_end(&mut buf.0)
+        .ok()?;
+    (buf.0.len() <= len.min(MAX_FILE_BYTES)).then_some(buf)
+}
+
+/// Loads settings; a missing or damaged file yields the defaults. The file buffer is wiped
+/// after parsing (QA-WF-06); serde_json's own scratch copies of escaped strings are out of
+/// reach.
 pub fn load(path: Option<&Path>) -> Stored {
-    path.and_then(|p| std::fs::read(p).ok())
-        .filter(|bytes| bytes.len() <= 256 * 1024)
-        .and_then(|bytes| serde_json::from_slice::<Stored>(&bytes).ok())
+    path.and_then(read_file)
+        .and_then(|bytes| serde_json::from_slice::<Stored>(&bytes.0).ok())
         .unwrap_or_default()
         .sanitized()
 }
@@ -136,9 +193,9 @@ pub fn save(path: Option<&Path>, stored: &Stored) -> Result<(), String> {
     let dir = path.parent().ok_or("settings location is unavailable")?;
     let io = |e: std::io::Error| format!("settings could not be saved ({:?})", e.kind());
     std::fs::create_dir_all(dir).map_err(io)?;
-    let json = serde_json::to_vec_pretty(stored).map_err(|_| "settings could not be encoded")?;
+    let json = encode(stored).ok_or("settings could not be encoded")?;
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(io)?;
+    std::fs::write(&tmp, &json.0).map_err(io)?;
     std::fs::rename(&tmp, path).map_err(io)
 }
 
@@ -244,6 +301,17 @@ mod tests {
         save(Some(&path), &on).expect("save");
         assert_eq!(load(Some(&path)).autostart, Some(true));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn encoding_allocates_once_and_matches_serde() {
+        let s = Stored {
+            excluded_user: vec!["a.exe".into()],
+            ..Stored::default()
+        };
+        let buf = encode(&s).expect("encode");
+        assert_eq!(buf.0.len(), buf.0.capacity(), "no reallocation, no slack");
+        assert_eq!(buf.0, serde_json::to_vec_pretty(&s).expect("json"));
     }
 
     #[test]
