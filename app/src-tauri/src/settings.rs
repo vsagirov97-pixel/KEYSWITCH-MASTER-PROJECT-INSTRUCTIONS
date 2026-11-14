@@ -171,6 +171,51 @@ mod tests {
     }
 
     #[test]
+    fn corrupt_or_missing_file_gives_safe_defaults() {
+        let dir = std::env::temp_dir().join(format!("ks-settings-corrupt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("settings.json");
+        // A file that does not exist, and a path that is a directory.
+        assert_eq!(load(Some(&dir.join("absent.json"))), Stored::default());
+        assert_eq!(load(Some(&dir)), Stored::default());
+        let mut oversized = br#"{"uiLanguage":"en","excludedUser":["#.to_vec();
+        oversized.extend(std::iter::repeat_n(&b"\"a.exe\","[..], 40_000).flatten());
+        assert!(oversized.len() > 256 * 1024);
+        oversized.extend(br#""b.exe"]}"#);
+        let damaged: [&[u8]; 9] = [
+            b"",
+            b"{ not json",
+            br#"{"uiLanguage":"en","theme":"#,
+            &[0xFF, 0xFE, 0x00, 0x7B, 0x00, 0xD8],
+            b"[1, 2, 3]",
+            b"null",
+            br#"{"uiLanguage":"klingon"}"#,
+            br#"{"hotkey":5,"uiLanguage":"en"}"#,
+            &oversized,
+        ];
+        for bytes in damaged {
+            std::fs::write(&path, bytes).expect("write");
+            assert_eq!(load(Some(&path)), Stored::default());
+            // Loading never rewrites the file (nothing is lost before the user saves).
+            assert_eq!(std::fs::read(&path).expect("read"), bytes);
+        }
+        // Well-formed JSON with an invalid hotkey keeps the valid fields, resets the hotkey.
+        std::fs::write(
+            &path,
+            br#"{"uiLanguage":"en","hotkey":{"key":"NoSuchKey","modifiers":[]}}"#,
+        )
+        .expect("write");
+        let loaded = load(Some(&path));
+        assert_eq!(loaded.ui_language, UiLanguage::En);
+        assert_eq!(loaded.hotkey, Hotkey::default());
+        // The next save replaces a damaged file with a readable one.
+        std::fs::write(&path, b"{ not json").expect("write");
+        save(Some(&path), &Stored::default()).expect("save");
+        assert_eq!(load(Some(&path)), Stored::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn missing_file_gives_defaults() {
         assert_eq!(load(None), Stored::default());
         assert!(save(None, &Stored::default()).is_err());

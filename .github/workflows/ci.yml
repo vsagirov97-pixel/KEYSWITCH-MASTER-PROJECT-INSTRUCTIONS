@@ -83,6 +83,11 @@ jobs:
           path: target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
+      - name: Installer round trip (silent install, single instance, uninstall)
+        # Ephemeral runner: installs per-user, writes and expects removal of the HKCU Run
+        # value "KeySwitch". See the script header for the checks.
+        shell: pwsh
+        run: ./scripts/installer-roundtrip.ps1
 
   windows-probe:
     # Spikes S-2a/S-2b: Win32/UIA/SendInput/clipboard/layout/hotkey probe on the runner's
