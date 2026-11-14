@@ -43,3 +43,9 @@ export function hotkeyParts(hotkey: Hotkey): string[] {
 export function formatHotkey(hotkey: Hotkey): string {
   return hotkeyParts(hotkey).join("+");
 }
+
+/** Same combination, regardless of the order of the modifiers. */
+export function sameHotkey(a: Hotkey, b: Hotkey): boolean {
+  if (a.key !== b.key || a.modifiers.length !== b.modifiers.length) return false;
+  return a.modifiers.every((modifier) => b.modifiers.includes(modifier));
+}
