@@ -20,7 +20,9 @@
     reason = "the result table is the purpose of this test; the cases are synthetic"
 )]
 
-use ks_engine::{Config, Outcome, Platform, Stop, TargetInfo, UserText, run};
+use ks_engine::{
+    Config, History, Outcome, Platform, Stop, TargetInfo, UserText, run, run_with_history,
+};
 
 /// A single-line field with the caret at the end and an optional selection at its end.
 struct Field {
@@ -70,6 +72,9 @@ impl Platform for Field {
     }
     fn switch_layout(&mut self, _lang: &str) -> bool {
         true
+    }
+    fn field_key(&self) -> Option<u64> {
+        Some(1)
     }
 }
 
@@ -305,27 +310,37 @@ const CASES: &[(&str, Mode, &str, &str)] = &[
     ),
     ("mixed", Select, "Скажи ему: ltkfq", "Скажи ему: делай"),
     ("mixed", Select, "Я ljvf, а ты?", "Я дома, а ты?"),
+    // --- re-test of the QA-WF-01/02 fix (abbreviation lists), cases new on e3a078a ---
+    ("abbr_b3", Caret, "Смотри HDMI", "Смотри HDMI"),
+    ("abbr_b3", Caret, "Порт USB-C", "Порт USB-C"),
+    ("abbr_b3", Caret, "Формат PDF.", "Формат PDF."),
+    ("abbr_b3", Caret, "Файл (PDF)", "Файл (PDF)"),
+    ("abbr_b3", Caret, "Живу в HA", "Живу в РФ"),
+    ("abbr_b3", Caret, "Это ЩЛ", "Это OK"),
+    ("abbr_b3", Caret, "ok ЗС", "ok PC"),
+    ("abbr_b3", Caret, "Скажи LF", "Скажи ДА"),
+    ("abbr_b3", Caret, "Ну YTN", "Ну НЕТ"),
+    ("abbr_b3", Caret, "Сдал ЕГЕ", "Сдал ЕГЕ"),
+    ("abbr_b3", Caret, "Звони в МЧС", "Звони в МЧС"),
+    ("abbr_b3", Caret, "Send to ЖКХ.", "Send to ЖКХ."),
+    (
+        "abbr_b3",
+        Select,
+        "Отчёт для ФНС, file ыутв",
+        "Отчёт для ФНС, file send",
+    ),
+    ("abbr_b3", Select, "Купи ЕМ for home", "Купи TV for home"),
 ];
 
 /// WRONG/FALSE results that are known and tracked: (field content, defect ID).
 const KNOWN: &[(&str, &str)] = &[
-    // Mixed selection: an all-caps Cyrillic abbreviation in English text is re-typed into
-    // punctuation/Latin garbage by the per-token decision.
-    ("Send it to ЖКХ ещвфн", "QA-WF-01"),
-    ("Send it to ЖКХ", "QA-WF-01"),
-    ("Call ЖЭК ещвфн", "QA-WF-01"),
-    ("Ask ЖЭК", "QA-WF-01"),
-    ("ФСБ and ЖКХ", "QA-WF-01"),
-    // Caret: a correct all-caps abbreviation outside the technical list is converted.
-    ("Скачай PDF", "QA-WF-02"),
-    ("Это HTTP", "QA-WF-02"),
-    ("Paid via ФНС", "QA-WF-02"),
-    ("Call ЖКХ", "QA-WF-02"),
-    ("Это ПДФ", "QA-WF-02"),
+    // QA-WF-01/02 fixed on e3a078a (abbreviation lists). Residual: an all-caps abbreviation
+    // that is not listed and whose re-typing is a dictionary word of the other language.
+    ("Сдал ЕГЕ", "QA-WF-08"),
 ];
 
-/// Upper bound on harmless refusals (measured 5 on 6db8fe9, regression guard only).
-const MAX_REFUSED: usize = 5;
+/// Upper bound on harmless refusals (5 on 6db8fe9, 2 on e3a078a; regression guard only).
+const MAX_REFUSED: usize = 2;
 
 #[test]
 fn qa_final_synthetic_cases() {
@@ -371,4 +386,50 @@ fn qa_final_synthetic_cases() {
         defects.join("\n")
     );
     assert!(refused <= MAX_REFUSED, "refusals grew: {refused}");
+}
+
+/// Second press within the toggle window undoes the last conversion in the same field,
+/// including a wrong guess (QA-WF-08), and a third press converts again.
+#[test]
+fn second_press_undoes_in_the_same_field() {
+    let c = ks_core::builtin().expect("built-in data");
+    for (input, once) in [
+        ("Сдал ЕГЕ", "Сдал TUT"),
+        ("Привет ghbdtn", "Привет привет"),
+        ("I am ыгкую", "I am sure."),
+    ] {
+        let mut h = History::default();
+        let mut f = Field {
+            text: input.to_owned(),
+            selected: None,
+        };
+        let cfg = Config::default();
+        assert!(matches!(
+            run_with_history(&mut f, &c, &cfg, &mut h),
+            Outcome::Converted { .. }
+        ));
+        assert_eq!(f.text, once);
+        assert!(h.is_held());
+        assert!(matches!(
+            run_with_history(&mut f, &c, &cfg, &mut h),
+            Outcome::Converted { .. }
+        ));
+        assert_eq!(f.text, input, "second press must restore the original");
+        run_with_history(&mut f, &c, &cfg, &mut h);
+        assert_eq!(f.text, once, "third press converts again");
+        // Text typed after the conversion breaks the toggle: no undo of other text.
+        let mut h = History::default();
+        let mut f = Field {
+            text: input.to_owned(),
+            selected: None,
+        };
+        run_with_history(&mut f, &c, &cfg, &mut h);
+        f.text.push_str(" ok");
+        run_with_history(&mut f, &c, &cfg, &mut h);
+        assert_eq!(f.text, format!("{once} ok"));
+        assert!(
+            !format!("{h:?}").contains(once),
+            "History Debug shows no text"
+        );
+    }
 }
