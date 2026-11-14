@@ -15,18 +15,15 @@ function isControl(codePoint: number): boolean {
   return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f);
 }
 
-/** `always_forbidden` of `ks_engine::macros`. */
+/** Unicode general category Cf (format chars: zero-width, bidi marks, soft hyphen, tags...),
+ * mirroring `ks_engine::is_format_char`. */
+const FORMAT_CHAR = /^\p{Cf}$/u;
+
+/** `always_forbidden` of `ks_engine::macros`: control chars (except \n, \t), U+2028/2029, all Cf. */
 function isAlwaysForbidden(codePoint: number): boolean {
   if (isControl(codePoint)) return codePoint !== 0x0a && codePoint !== 0x09;
-  return (
-    codePoint === 0x2028 ||
-    codePoint === 0x2029 ||
-    codePoint === 0x061c ||
-    codePoint === 0x200e ||
-    codePoint === 0x200f ||
-    (codePoint >= 0x202a && codePoint <= 0x202e) ||
-    (codePoint >= 0x2066 && codePoint <= 0x2069)
-  );
+  if (codePoint === 0x2028 || codePoint === 0x2029) return true;
+  return FORMAT_CHAR.test(String.fromCodePoint(codePoint));
 }
 
 export function charCount(text: string): number {
